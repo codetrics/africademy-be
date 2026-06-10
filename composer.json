@@ -8,11 +8,13 @@
         "ext-ctype": "*",
         "ext-iconv": "*",
         "dragonmantank/cron-expression": "^3.6",
+        "symfony/apache-pack": "^1",
         "symfony/console": "8.1.*",
         "symfony/dotenv": "8.1.*",
         "symfony/flex": "^2",
         "symfony/framework-bundle": "8.1.*",
         "symfony/messenger": "8.1.*",
+        "symfony/monolog-bundle": "^4",
         "symfony/runtime": "8.1.*",
         "symfony/scheduler": "8.1.*",
         "symfony/yaml": "8.1.*"
@@ -65,7 +67,7 @@
     },
     "extra": {
         "symfony": {
-            "allow-contrib": false,
+            "allow-contrib": true,
             "require": "8.1.*"
         }
     }
