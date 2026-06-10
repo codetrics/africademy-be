@@ -1,0 +1,89 @@
+name: Docker Deploy africademy-be
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-africademy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SSH_PORT: ${{ secrets.C3_SSH_PORT }}
+  DEPLOY_PATH: /opt/docker/testing_backend
+  COMPOSE_PATH: /opt/docker
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.C3_SSH_PRIVATE_KEY }}
+
+      - name: Trust server host key
+        run: ssh-keyscan -p ${{ env.SSH_PORT }} -H ${{ secrets.C3_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Ensure deploy path exists
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} '
+            sudo mkdir -p "${{ env.DEPLOY_PATH }}/var/log" "${{ env.DEPLOY_PATH }}/var/storage"
+            sudo chown -R "${{ secrets.C3_SSH_USER }}:${{ secrets.C3_SSH_USER }}" "${{ env.DEPLOY_PATH }}"
+          '
+
+      - name: Pre-flight check (.env.local must exist on server)
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} '
+            if [ ! -f "${{ env.DEPLOY_PATH }}/.env.local" ]; then
+              echo "::error::${{ env.DEPLOY_PATH }}/.env.local is missing on the server. Place it manually (chmod 600) before deploying."
+              exit 1
+            fi
+          '
+
+      - name: Rsync source to server
+        run: |
+          rsync -avz --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.idea/' \
+            --exclude='.claude/' \
+            --exclude='.vscode/' \
+            --exclude='.DS_Store' \
+            --exclude='var/' \
+            --exclude='vendor/' \
+            --exclude='node_modules/' \
+            --exclude='tests/' \
+            --exclude='.env.local' \
+            --exclude='.env.local.php' \
+            --exclude='.env.*.local' \
+            --exclude='*.log' \
+            --exclude='CLAUDE.md' \
+            -e "ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }}:${{ env.DEPLOY_PATH }}/
+
+      - name: Build and start testing_backend
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "cd '${{ env.COMPOSE_PATH }}' && sudo APP_USER='${{ secrets.C3_SSH_USER }}' docker compose up -d --build testing_backend testing_scheduler"
+
+      - name: Clear Symfony Cache
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "sudo docker compose -f '${{ env.COMPOSE_PATH }}/docker-compose.yml' exec -T --user '${{ secrets.C3_SSH_USER }}' testing_backend php bin/console cache:clear --env=prod --no-debug"
+
+      - name: Warmup Symfony Cache
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "sudo docker compose -f '${{ env.COMPOSE_PATH }}/docker-compose.yml' exec -T --user '${{ secrets.C3_SSH_USER }}' testing_backend php bin/console cache:warmup --env=prod --no-debug"
