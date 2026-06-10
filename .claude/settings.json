@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php *)",
+      "Skill(frontend-asset)",
+      "Skill(new-admin-controller)",
+      "Skill(new-api-endpoint)",
+      "Skill(new-command)",
+      "Skill(new-entity)",
+      "Skill(new-event-subscriber)",
+      "Skill(new-form)",
+      "Skill(new-migration)",
+      "Skill(new-repository)",
+      "Skill(new-service)",
+      "Skill(review-api-controller)",
+      "Skill(review-entity)"
+    ]
+  }
+}
