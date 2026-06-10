@@ -39,16 +39,6 @@ jobs:
             sudo chown -R "${{ secrets.C3_SSH_USER }}:${{ secrets.C3_SSH_USER }}" "${{ env.DEPLOY_PATH }}"
           '
 
-      - name: Pre-flight check (.env.local must exist on server)
-        run: |
-          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
-            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} '
-            if [ ! -f "${{ env.DEPLOY_PATH }}/.env.local" ]; then
-              echo "::error::${{ env.DEPLOY_PATH }}/.env.local is missing on the server. Place it manually (chmod 600) before deploying."
-              exit 1
-            fi
-          '
-
       - name: Rsync source to server
         run: |
           rsync -avz --delete \
@@ -70,11 +60,20 @@ jobs:
             -e "ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no" \
             ./ ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }}:${{ env.DEPLOY_PATH }}/
 
+      - name: Write .env.local on Server
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "umask 077 && cat > '${{ env.DEPLOY_PATH }}/.env.local' && chmod 600 '${{ env.DEPLOY_PATH }}/.env.local'" <<'EOF'
+          APP_ENV=prod
+          APP_SECRET=${{ secrets.APP_SECRET }}
+          EOF
+
       - name: Build and start testing_backend
         run: |
           ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
             ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
-            "cd '${{ env.COMPOSE_PATH }}' && sudo APP_USER='${{ secrets.C3_SSH_USER }}' docker compose up -d --build testing_backend testing_scheduler"
+            "cd '${{ env.COMPOSE_PATH }}' && sudo APP_USER='${{ secrets.C3_SSH_USER }}' docker compose up -d --build testing_backend"
 
       - name: Clear Symfony Cache
         run: |
@@ -87,3 +86,9 @@ jobs:
           ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
             ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
             "sudo docker compose -f '${{ env.COMPOSE_PATH }}/docker-compose.yml' exec -T --user '${{ secrets.C3_SSH_USER }}' testing_backend php bin/console cache:warmup --env=prod --no-debug"
+
+      - name: Recreate testing_scheduler
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "cd '${{ env.COMPOSE_PATH }}' && sudo APP_USER='${{ secrets.C3_SSH_USER }}' docker compose up -d --force-recreate testing_scheduler"
