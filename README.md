@@ -144,7 +144,7 @@ The scheduler container runs `php bin/console messenger:consume scheduler_defaul
 ## Conventions
 
 This is a strictly API-only backend: every controller returns JSON under
-`/api/v3` (`*OpenApiController`), with a single exception — one Swagger UI
+`/api/{version}` (`*ApiController`), with a single exception — one Swagger UI
 controller that renders the OpenAPI docs via Twig + Webpack Encore
 (`swagger-ui-dist` from npm).
 

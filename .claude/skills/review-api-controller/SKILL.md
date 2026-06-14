@@ -1,6 +1,6 @@
 ---
 name: review-api-controller
-description: Review an existing OpenApiController for compliance with project conventions. Use when the user asks to review, audit, or check an API controller. Checks auth flow, request parsing, validation, response serialization, transaction wrapping, and naming conventions.
+description: Review an existing ApiController for compliance with project conventions. Use when the user asks to review, audit, or check an API controller. Checks auth flow, request parsing, validation, response serialization, transaction wrapping, and naming conventions.
 disable-model-invocation: false
 argument-hint: [ControllerFileName]
 allowed-tools: Read Glob Grep Bash(ls *)
@@ -17,7 +17,7 @@ find src/Controller -name "$ARGUMENTS*" -o -name "*$ARGUMENTS*" 2>/dev/null | gr
 
 Read the controller:
 ```!
-cat "src/Controller/$ARGUMENTS.php" 2>/dev/null || cat "src/Controller/${ARGUMENTS}OpenApiController.php" 2>/dev/null || echo "File not found — check the argument"
+cat "src/Controller/$ARGUMENTS.php" 2>/dev/null || cat "src/Controller/${ARGUMENTS}ApiController.php" 2>/dev/null || echo "File not found — check the argument"
 ```
 
 ## Instructions
@@ -30,11 +30,11 @@ Read the controller content shown above, then work through each section of the c
 ## Checklist
 
 ### Naming & routing
-- [ ] Class name ends with `OpenApiController`
+- [ ] Class name ends with `ApiController`
 - [ ] Class extends `AbstractController`
 - [ ] **No constructor** — all dependencies injected as action-method parameters, never via constructor
-- [ ] Routes are under `/api/v3/`
-- [ ] Route names follow `app_<resource>_open_api_<action>` pattern
+- [ ] Routes are under `/api/{version}/` (e.g. `/api/v1/`)
+- [ ] Route names follow `app_<resource>_api_<action>` pattern
 - [ ] Route definitions include `requirements: ['_format' => 'json']` and `defaults: ['_format' => 'json']`
 - [ ] HTTP methods are explicit using `Request::METHOD_*` constants (`methods: [Request::METHOD_GET]` etc.) — no wildcard, no plain strings
 - [ ] ID route params are ULID public ids constrained with `Requirement::ULID` — not `'\d+'` (no integer-PK routes)

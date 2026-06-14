@@ -13,7 +13,7 @@ Invoke the matching skill before scaffolding the artefact; do not write these by
 | New Doctrine entity | `/new-entity ClassName` |
 | New repository | `/new-repository EntityClassName` |
 | New service class | `/new-service ServiceName` |
-| New API endpoint / `OpenApiController` | `/new-api-endpoint ResourceName` |
+| New API endpoint / `ApiController` | `/new-api-endpoint ResourceName` |
 | New console command | `/new-command CommandClassName` |
 | New event subscriber | `/new-event-subscriber SubscriberName` |
 | New Symfony form type | `/new-form FormName EntityClassName` |
@@ -134,7 +134,7 @@ All new/modified code must use PHP 8+ features.
 
 This is a **strictly API-only** project — controllers return JSON and follow one pattern:
 
-- **API controllers** (`api` firewall): class name ends with `OpenApiController` (e.g. `ExampleOpenApiController`), returns JSON only, routes under `/api/v3`, protected by JWT/stateless + `ROLE_STUDENT`.
+- **API controllers** (`api` firewall): class name ends with `ApiController` (e.g. `ExampleApiController`), returns JSON only, routes under `/api/{version}` (e.g. `/api/v1`), protected by JWT/stateless + `ROLE_STUDENT`.
 
 The **only** exception is a single **Swagger UI controller** that renders the OpenAPI docs through Twig + Webpack Encore (the `swagger-ui-dist` package via npm). It is the one and only controller permitted to render a Twig template. Do not create admin or HTML controllers of any other kind.
 

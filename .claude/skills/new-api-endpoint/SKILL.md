@@ -1,6 +1,6 @@
 ---
 name: new-api-endpoint
-description: Add a new JSON API endpoint to an existing OpenApiController, or scaffold a new one. Use when the user asks to add an API route, REST endpoint, or client-facing API action. All API endpoints in this project live under /api/v3/, use JWT auth via User, and return JsonResponse.
+description: Add a new JSON API endpoint to an existing ApiController, or scaffold a new one. Use when the user asks to add an API route, REST endpoint, or client-facing API action. All API endpoints in this project live under /api/{version}/, use JWT auth via User, and return JsonResponse.
 disable-model-invocation: false
 argument-hint: [ResourceName]
 allowed-tools: Read Write Edit Glob Grep Bash(ls *)
@@ -12,12 +12,12 @@ Scaffold a new API endpoint for the `$ARGUMENTS` resource.
 
 Existing API controllers:
 ```!
-ls src/Controller/ | grep OpenApi
+ls src/Controller/ | grep ApiController
 ```
 
 Check if a controller already exists for this resource:
 ```!
-ls src/Controller/$ARGUMENTSOpenApiController.php 2>/dev/null && echo "Controller exists — add endpoint to it" || echo "New controller needed"
+ls src/Controller/$ARGUMENTSApiController.php 2>/dev/null && echo "Controller exists — add endpoint to it" || echo "New controller needed"
 ```
 
 Existing services (to find or plan the backing service):
@@ -27,11 +27,11 @@ ls src/Service/*.php 2>/dev/null
 
 ## Instructions
 
-1. **Check if an `$ARGUMENTSOpenApiController` already exists** — if so, add the new action to it rather than creating a new file.
+1. **Check if an `$ARGUMENTSApiController` already exists** — if so, add the new action to it rather than creating a new file.
 2. **Read the existing controller first** (if it exists) to match its exact import list and code style.
-3. **Read an existing `*OpenApiController`** (if one exists) as a reference for the pattern; otherwise follow the templates below.
+3. **Read an existing `*ApiController`** (if one exists) as a reference for the pattern; otherwise follow the templates below.
 4. Determine which HTTP method(s) the user wants — default to GET if unspecified.
-5. **No constructor** — all dependencies are injected as action-method parameters (autowired). Never add a constructor to an `OpenApiController`.
+5. **No constructor** — all dependencies are injected as action-method parameters (autowired). Never add a constructor to an `ApiController`.
 
 ## Mandatory action order (every endpoint, no exceptions)
 
@@ -98,8 +98,8 @@ if (!$user instanceof User) {
 
 ```php
 #[Route(
-    '/api/v3/{resource}',
-    name: 'app_{resource}_open_api_get',
+    '/api/{version}/{resource}',
+    name: 'app_{resource}_api_get',
     requirements: ['_format' => 'json'],
     defaults: ['_format' => 'json'],
     methods: [Request::METHOD_GET],
@@ -143,8 +143,8 @@ public function get{Resource}s(
 
 ```php
 #[Route(
-    '/api/v3/{resource}',
-    name: 'app_{resource}_open_api_post',
+    '/api/{version}/{resource}',
+    name: 'app_{resource}_api_post',
     requirements: ['_format' => 'json'],
     defaults: ['_format' => 'json'],
     methods: [Request::METHOD_POST],
@@ -208,8 +208,8 @@ public function create{Resource}(
 
 ```php
 #[Route(
-    '/api/v3/{resource}s/{id}',
-    name: 'app_{resource}_open_api_get_one',
+    '/api/{version}/{resource}s/{id}',
+    name: 'app_{resource}_api_get_one',
     requirements: ['_format' => 'json', 'id' => Requirement::ULID],
     defaults: ['_format' => 'json'],
     methods: [Request::METHOD_GET],
@@ -252,8 +252,8 @@ public function get{Resource}(
 
 ```php
 #[Route(
-    '/api/v3/{resource}s/{id}',
-    name: 'app_{resource}_open_api_delete',
+    '/api/{version}/{resource}s/{id}',
+    name: 'app_{resource}_api_delete',
     requirements: ['_format' => 'json', 'id' => Requirement::ULID],
     defaults: ['_format' => 'json'],
     methods: [Request::METHOD_DELETE],
