@@ -18,7 +18,7 @@ ls src/EventSubscriber/
 ## Instructions
 
 1. **Check for duplicates** — if `src/EventSubscriber/$ARGUMENTSSubscriber.php` already exists, stop.
-2. **Read an existing subscriber** for style reference — e.g. `JWTExceptionSubscriber.php` for JWT events, `OpenAPIExceptionsSubscriber.php` for API exception handling.
+2. **Read an existing subscriber** in `src/EventSubscriber/` (if any) for style reference — match how JWT events and API exception handling are wired before adding a new one.
 3. **File location:** `src/EventSubscriber/$ARGUMENTSSubscriber.php`
 4. No manual service definition needed — `autoconfigure: true` in `services.yaml` auto-tags it.
 

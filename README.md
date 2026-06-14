@@ -146,9 +146,25 @@ The scheduler container runs `php bin/console messenger:consume scheduler_defaul
 This is a strictly API-only backend: every controller returns JSON under
 `/api/v3` (`*OpenApiController`), with a single exception — one Swagger UI
 controller that renders the OpenAPI docs via Twig + Webpack Encore
-(`swagger-ui-dist` from npm). Project coding standards, controller patterns,
-entity/repository/service conventions, and the plan-first workflow are
-documented in `.claude/CLAUDE.md`. Read it before adding new code.
+(`swagger-ui-dist` from npm).
+
+API design follows Symfony best practices:
+
+- **Stateless JWT auth** — the `api` firewall is `stateless: true`; every request
+  is authenticated by its bearer token (no sessions/cookies).
+- **Declarative authorization** — actions are gated with `#[IsGranted]`
+  (Voters for record-level checks); security exceptions are normalized to the
+  JSON error envelope by a `kernel.exception` subscriber.
+- **REST status semantics** — `200`/`201`/`204`/`422` used correctly.
+- **Native backed enums** for enumerations.
+- **ULID public identifiers** — the API exposes Symfony UID (ULID) values, never
+  internal auto-increment primary keys.
+- **Rate limiting** — sensitive endpoints are throttled with the Symfony
+  RateLimiter.
+
+Project coding standards, controller patterns, entity/repository/service
+conventions, and the plan-first workflow are documented in `.claude/CLAUDE.md`.
+Read it before adding new code.
 
 ## License
 

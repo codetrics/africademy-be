@@ -27,7 +27,7 @@ ls "src/Entity/$ARGUMENTS[1].php" 2>/dev/null && echo "Entity found" || echo "No
 ## Instructions
 
 1. **Check for duplicates** — if `src/Form/$ARGUMENTS[0].php` already exists, stop.
-2. **Read a similar form** (e.g. `ContactType.php`) to match the project's field and option style.
+2. **Read a similar existing form** in `src/Form/` (if any) to match the project's field and option style.
 3. **File location:** `src/Form/$ARGUMENTS[0].php`
 
 ## Checklist

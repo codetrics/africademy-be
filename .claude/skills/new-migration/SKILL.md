@@ -64,32 +64,31 @@ Confirm the output shows the migration applied successfully.
 **Do not run migrations on staging or production without explicit user confirmation.**
 Ask the user: "Ready to run this on staging?" before proceeding.
 
-## Data migrations for new `NotificationType` constants
+## Data migrations for seed / reference rows
 
-Whenever a new `public const string TYPE_* = '...'` is added to `App\Entity\NotificationType`, a manual data migration **must** be created alongside it — `doctrine:migrations:diff` will not generate it automatically.
+When a schema change needs accompanying seed or reference data, write that data migration by hand — `doctrine:migrations:diff` only generates schema DDL, never `INSERT`/`UPDATE`/`DELETE` data.
 
-Follow this pattern (see e.g. `Version20260410130000.php`):
+Follow this pattern:
 
 ```php
 public function up(Schema $schema): void
 {
     $this->addSql(
-        "INSERT INTO notification_type (name, slug, created_at, updated_at)
-         VALUES ('Human Readable Name', 'the_slug_constant_value', NOW(), NOW())"
+        "INSERT INTO {table} ({columns}, created_at, updated_at)
+         VALUES ({values}, NOW(), NOW())"
     );
 }
 
 public function down(Schema $schema): void
 {
     $this->addSql(
-        "DELETE FROM notification_type WHERE slug = 'the_slug_constant_value'"
+        "DELETE FROM {table} WHERE {unique_column} = {value}"
     );
 }
 ```
 
-- The `slug` value must match the constant string exactly
-- `name` should be the human-readable label (Title Case, spaces)
-- Create this as a standalone migration file — do not bundle it with schema changes
+- Make `down()` the exact inverse of `up()` so the migration is reversible
+- Create the data migration as a standalone file — do not bundle it with schema changes
 
 ## Rules
 

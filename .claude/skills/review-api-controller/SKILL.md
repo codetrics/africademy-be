@@ -37,17 +37,19 @@ Read the controller content shown above, then work through each section of the c
 - [ ] Route names follow `app_<resource>_open_api_<action>` pattern
 - [ ] Route definitions include `requirements: ['_format' => 'json']` and `defaults: ['_format' => 'json']`
 - [ ] HTTP methods are explicit using `Request::METHOD_*` constants (`methods: [Request::METHOD_GET]` etc.) — no wildcard, no plain strings
+- [ ] ID route params are ULID public ids constrained with `Requirement::ULID` — not `'\d+'` (no integer-PK routes)
 
 ### Auth (every action)
+- [ ] `#[IsGranted('ROLE_STUDENT')]` (or a Voter) gates the action — declarative auth, not a hand-rolled role check
 - [ ] `$this->getUser()` is called before any other logic
-- [ ] Auth check uses `!$user instanceof ClientAuth` — not `is_null($user)` or `!= null`
-- [ ] Failure returns `JsonExceptionResponse(ERROR_UNAUTHORIZED, ..., HTTP_UNAUTHORIZED)`
-- [ ] `$contact = $user->getContact()` is extracted for permission scoping
+- [ ] User narrowing uses `!$user instanceof User` — not `is_null($user)` or `!= null`
+- [ ] The authenticated user is used to scope data access (records are queried/filtered by the user)
+- [ ] No per-action `try/catch` around security exceptions — the `kernel.exception` subscriber normalizes them into `JsonExceptionResponse`
 
 ### Request parsing
 - [ ] JSON body decoded with `json_decode($request->getContent(), true)` and guarded with `json_last_error() !== JSON_ERROR_NONE`
 - [ ] Query params use `$request->query->getInt/getString()` — not `$request->get()`
-- [ ] Route params use `$request->attributes->getInt/get('id')`
+- [ ] Route params use `$request->attributes->getString('id')` and resolve via `findByPublicId*` — ULID public ids, never the integer PK
 - [ ] No usage of `$_GET`, `$_POST`, or `$_REQUEST`
 
 ### Validation
@@ -62,6 +64,8 @@ Read the controller content shown above, then work through each section of the c
 - [ ] All success paths serialize via `SerializerService::serialize()` then `json_decode()` the result
 - [ ] `$response->setData([...])` used — data set correctly on `JsonResponse`
 - [ ] No raw entity getter calls used to build response arrays manually
+- [ ] REST-correct status set via `Response::HTTP_*` constants: 200 reads/updates, 201 create, 204 delete/no-body, 422 validation — no bare integers
+- [ ] Responses expose the ULID public id, never the integer PK
 
 ### Writes
 - [ ] Multi-entity writes wrapped in `beginTransaction()` / `commit()` / `rollback()`
