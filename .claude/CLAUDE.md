@@ -14,7 +14,6 @@ Invoke the matching skill before scaffolding the artefact; do not write these by
 | New repository | `/new-repository EntityClassName` |
 | New service class | `/new-service ServiceName` |
 | New API endpoint / `OpenApiController` | `/new-api-endpoint ResourceName` |
-| New admin dashboard controller | `/new-admin-controller ControllerName` |
 | New console command | `/new-command CommandClassName` |
 | New event subscriber | `/new-event-subscriber SubscriberName` |
 | New Symfony form type | `/new-form FormName EntityClassName` |
@@ -128,12 +127,13 @@ All new/modified code must use PHP 8+ features.
 
 ## Controller Conventions
 
-Two distinct groups — never mix them:
+This is a **strictly API-only** project — controllers return JSON and follow one pattern:
 
-- **Admin controllers** (`main` firewall): class name starts with `Admin` (e.g. `AdminBillingController`), returns Twig HTML, routes under `/admin`, protected by form login + `ROLE_ADMIN`.
 - **API controllers** (`api` firewall): class name ends with `OpenApiController` (e.g. `BillingOpenApiController`), returns JSON only, routes under `/api/v3`, protected by JWT/stateless + `ROLE_CLIENT`.
 
-Never create a controller that doesn't follow one of these patterns. Never use the `api` firewall in an Admin controller or vice versa. Ask if unsure which group a new controller belongs to.
+The **only** exception is a single **Swagger UI controller** that renders the OpenAPI docs through Twig + Webpack Encore (the `swagger-ui-dist` package via npm). It is the one and only controller permitted to render a Twig template. Do not create admin or HTML controllers of any other kind.
+
+Never create a controller that doesn't follow the API pattern (or the single Swagger UI exception). Ask if unsure.
 
 **No controller constructors.** Inject every service/repository as a **method-level argument** on the action that needs it — rely on autowiring/autoconfigure. Private helpers in a controller accept their dependencies as parameters passed from the action. No `private readonly` service properties on controllers.
 

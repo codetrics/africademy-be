@@ -143,9 +143,12 @@ The scheduler container runs `php bin/console messenger:consume scheduler_defaul
 
 ## Conventions
 
-Project coding standards, controller patterns (Admin vs. API), entity/repository/
-service conventions, and the plan-first workflow are documented in
-`.claude/CLAUDE.md`. Read it before adding new code.
+This is a strictly API-only backend: every controller returns JSON under
+`/api/v3` (`*OpenApiController`), with a single exception — one Swagger UI
+controller that renders the OpenAPI docs via Twig + Webpack Encore
+(`swagger-ui-dist` from npm). Project coding standards, controller patterns,
+entity/repository/service conventions, and the plan-first workflow are
+documented in `.claude/CLAUDE.md`. Read it before adding new code.
 
 ## License
 
