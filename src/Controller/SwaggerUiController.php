@@ -14,13 +14,13 @@ use Symfony\Component\Yaml\Yaml;
 
 final class SwaggerUiController extends AbstractController
 {
-    #[Route('/api/doc', name: 'swagger_ui', methods: [Request::METHOD_GET])]
+    #[Route('/open-api/docs', name: 'swagger_ui', methods: [Request::METHOD_GET])]
     public function index(): Response
     {
         return $this->render('swagger/index.html.twig');
     }
 
-    #[Route('/api/doc.json', name: 'swagger_ui_spec', methods: [Request::METHOD_GET])]
+    #[Route('/open-api/docs.json', name: 'swagger_ui_spec', methods: [Request::METHOD_GET])]
     public function spec(
         #[Autowire('%kernel.project_dir%')] string $projectDir,
     ): JsonResponse {

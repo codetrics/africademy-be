@@ -5,5 +5,4 @@ info:
     version: 1.0.0
 servers:
     - url: http://be-preview.codetrics.co.za/api/v1
-# Swagger UI routes (/api/doc, /api/doc.json) are intentionally undocumented.
 paths: {}
