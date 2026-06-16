@@ -5,6 +5,8 @@ FROM php:8.5-apache
 ARG APP_USER
 ARG APP_UID=1000
 ARG APP_GID=1000
+ARG NVM_VERSION=v0.40.1
+ARG NODE_VERSION=lts/krypton
 
 RUN test -n "$APP_USER" || (echo "APP_USER build arg is required" && exit 1)
 
@@ -36,6 +38,7 @@ RUN groupadd -g ${APP_GID} ${APP_USER} \
 
 ENV APACHE_RUN_USER=${APP_USER}
 ENV APACHE_RUN_GROUP=${APP_USER}
+ENV NVM_DIR=/home/${APP_USER}/.nvm
 ENV HOME=/home/${APP_USER}
 
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
@@ -76,6 +79,21 @@ RUN chown ${APP_USER}:${APP_USER} /home/${APP_USER}/public_html \
  && mkdir -p /home/${APP_USER}/public_html/var \
  && chown -R ${APP_USER}:${APP_USER} /home/${APP_USER}/public_html/var
 
+# Install nvm + Node — cached unless NODE_VERSION / NVM_VERSION changes
+USER ${APP_USER}
+RUN curl -fsSL -o /tmp/nvm-install.sh \
+        https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh \
+    && bash /tmp/nvm-install.sh \
+    && rm /tmp/nvm-install.sh \
+    && bash -c "source $NVM_DIR/nvm.sh && nvm install ${NODE_VERSION} && nvm alias default ${NODE_VERSION}"
+USER root
+
+# NPM dependencies — cached unless package.json / package-lock.json / webpack.config.js change
+COPY --chown=${APP_USER}:${APP_USER} package.json package-lock.json webpack.config.js ./
+USER ${APP_USER}
+RUN bash -c "source $NVM_DIR/nvm.sh && npm install"
+USER root
+
 # Composer dependencies — cached unless composer.json / composer.lock / symfony.lock change
 COPY --chown=${APP_USER}:${APP_USER} composer.json composer.lock symfony.lock ./
 USER ${APP_USER}
@@ -85,11 +103,14 @@ USER root
 # Application source — busts on any code change (expected)
 COPY --chown=${APP_USER}:${APP_USER} . /home/${APP_USER}/public_html
 
-# Final build: autoloader, env cache
+# Final build: assets, autoloader, env cache. Always re-runs on source change (correct)
 USER ${APP_USER}
-RUN composer dump-autoload --optimize --no-dev \
+RUN bash -c "source $NVM_DIR/nvm.sh \
+    && npm run build \
+    && npm prune --production \
+    && composer dump-autoload --optimize --no-dev \
     && composer dump-env prod \
-    && rm -f .env.local
+    && rm -f .env.local"
 USER root
 
 EXPOSE 80

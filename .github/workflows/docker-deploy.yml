@@ -51,6 +51,7 @@ jobs:
             --exclude='var/' \
             --exclude='vendor/' \
             --exclude='node_modules/' \
+            --exclude='public/build/' \
             --exclude='tests/' \
             --exclude='.env.local' \
             --exclude='.env.local.php' \

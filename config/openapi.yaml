@@ -1,0 +1,9 @@
+openapi: 3.0.3
+info:
+    title: Africademy API
+    description: Africademy backend API.
+    version: 1.0.0
+servers:
+    - url: http://be-preview.codetrics.co.za/api/v1
+# Swagger UI routes (/api/doc, /api/doc.json) are intentionally undocumented.
+paths: {}
