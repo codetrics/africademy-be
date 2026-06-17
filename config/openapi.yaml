@@ -5,4 +5,237 @@ info:
     version: 1.0.0
 servers:
     - url: http://be-preview.codetrics.co.za/api/v1
-paths: {}
+security:
+    - bearerAuth: []
+paths:
+    /auth/register:
+        post:
+            tags: [Auth]
+            summary: Register a new user
+            description: Creates a user and its profile. Returns no token — log in afterwards. Public endpoint.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, password, first_name, last_name]
+                            properties:
+                                email: { type: string, format: email, example: jane@example.com }
+                                password: { type: string, format: password, minLength: 8, example: s3cretpass }
+                                first_name: { type: string, example: Jane }
+                                last_name: { type: string, example: Doe }
+            responses:
+                '201':
+                    description: User created
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    user: { $ref: '#/components/schemas/User' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/login:
+        post:
+            tags: [Auth]
+            summary: Authenticate and obtain tokens
+            description: Returns a JWT access token and a refresh token. Public endpoint.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, password]
+                            properties:
+                                email: { type: string, format: email, example: jane@example.com }
+                                password: { type: string, format: password, example: s3cretpass }
+            responses:
+                '200':
+                    description: Authenticated
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    token: { type: string, description: JWT access token (TTL 1h) }
+                                    refresh_token: { type: string, description: Refresh token (TTL 30d) }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /auth/refresh:
+        post:
+            tags: [Auth]
+            summary: Exchange a refresh token for a new access token
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [refresh_token]
+                            properties:
+                                refresh_token: { type: string }
+            responses:
+                '200':
+                    description: New tokens issued
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    token: { type: string }
+                                    refresh_token: { type: string }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /profile:
+        get:
+            tags: [Profile]
+            summary: Get the authenticated user's profile
+            responses:
+                '200':
+                    description: The profile
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    profile: { $ref: '#/components/schemas/Profile' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+        patch:
+            tags: [Profile]
+            summary: Update the authenticated user's profile
+            description: All fields optional; only provided fields are updated.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                first_name: { type: string }
+                                last_name: { type: string }
+                                bio: { type: string, nullable: true }
+                                phone: { type: string, nullable: true }
+                                locale: { type: string, example: en }
+                                timezone: { type: string, example: Africa/Johannesburg }
+            responses:
+                '200':
+                    description: Updated profile
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    profile: { $ref: '#/components/schemas/Profile' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /profile/avatar:
+        get:
+            tags: [Profile]
+            summary: Stream the authenticated user's avatar image
+            responses:
+                '200':
+                    description: The avatar image
+                    content:
+                        image/*:
+                            schema: { type: string, format: binary }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Profile]
+            summary: Upload or replace the avatar
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [avatar]
+                            properties:
+                                avatar:
+                                    type: string
+                                    format: binary
+                                    description: JPEG, PNG or WebP, max 2 MB
+            responses:
+                '200':
+                    description: Updated profile with new avatar URL
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    profile: { $ref: '#/components/schemas/Profile' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Profile]
+            summary: Remove the avatar
+            responses:
+                '204': { description: Avatar removed }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+components:
+    securitySchemes:
+        bearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+    schemas:
+        User:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                email: { type: string, format: email }
+                roles: { type: array, items: { type: string } }
+                status: { type: string, enum: [active, suspended] }
+                profile: { $ref: '#/components/schemas/Profile' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Profile:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                first_name: { type: string }
+                last_name: { type: string }
+                display_name: { type: string, description: Computed from first and last name }
+                avatar: { type: string, nullable: true, description: 'Absolute URL to the avatar stream endpoint, or null' }
+                bio: { type: string, nullable: true }
+                phone: { type: string, nullable: true }
+                locale: { type: string, example: en }
+                timezone: { type: string, example: Africa/Johannesburg }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Error:
+            type: object
+            properties:
+                error: { type: string, example: validation_error }
+                error_description: { type: string, example: Email cannot be blank. }
+    responses:
+        BadRequest:
+            description: Malformed request or invalid JSON
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        Unauthorized:
+            description: Missing or invalid credentials
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        NotFound:
+            description: Resource not found
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        ValidationError:
+            description: Validation failed
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        RateLimited:
+            description: Too many requests
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }

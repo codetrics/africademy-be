@@ -9,3 +9,8 @@
 
 controllers:
     resource: routing.controllers
+
+# Handled by the security firewall's json_login authenticator (no controller).
+api_auth_login:
+    path: /api/v1/auth/login
+    methods: [POST]
