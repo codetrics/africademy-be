@@ -29,6 +29,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     public const string ROLE_DEFAULT = 'ROLE_STUDENT';
+    public const string ROLE_TEACHER = 'ROLE_TEACHER';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

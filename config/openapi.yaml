@@ -177,6 +177,255 @@ paths:
                 '204': { description: Avatar removed }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /categories:
+        get:
+            tags: [Catalog]
+            summary: List course categories
+            responses:
+                '200':
+                    description: Categories
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    categories:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Category' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /courses:
+        get:
+            tags: [Courses]
+            summary: List courses (paginated)
+            description: Returns published courses. Teachers also see their own drafts.
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+                - { name: category, in: query, schema: { type: string }, description: Category slug }
+                - { name: level, in: query, schema: { type: string, enum: [beginner, intermediate, advanced] } }
+                - { name: q, in: query, schema: { type: string }, description: Title search }
+            responses:
+                '200':
+                    description: Paginated courses
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    courses:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Course' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+        post:
+            tags: [Courses]
+            summary: Create a course (draft)
+            description: Requires ROLE_TEACHER. The slug is generated from the title.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title, category_id]
+                            properties:
+                                title: { type: string }
+                                category_id: { type: string, description: Category ULID }
+                                description: { type: string, nullable: true }
+                                tagline: { type: string, nullable: true }
+                                level: { type: string, enum: [beginner, intermediate, advanced] }
+                                price_amount_cents: { type: integer, example: 450000 }
+                                price_currency: { type: string, example: ZAR }
+                                tags: { type: array, items: { type: string } }
+                                objectives: { type: array, items: { type: string } }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /courses/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Courses]
+            summary: Get a course
+            responses:
+                '200':
+                    description: The course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Courses]
+            summary: Update a course (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                title: { type: string }
+                                category_id: { type: string }
+                                description: { type: string, nullable: true }
+                                tagline: { type: string, nullable: true }
+                                level: { type: string, enum: [beginner, intermediate, advanced] }
+                                price_amount_cents: { type: integer }
+                                price_currency: { type: string }
+                                tags: { type: array, items: { type: string } }
+                                objectives: { type: array, items: { type: string } }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Courses]
+            summary: Delete a course (owner only)
+            responses:
+                '204': { description: Course deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/publish:
+        post:
+            tags: [Courses]
+            summary: Publish a course (owner only)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '200':
+                    description: Published course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{courseId}/lessons:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Lessons]
+            summary: List a course's lessons
+            description: Non-owners see published lessons only.
+            responses:
+                '200':
+                    description: Lessons (ordered by position)
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lessons:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Lesson' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Lessons]
+            summary: Add a lesson (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title, type]
+                            properties:
+                                title: { type: string }
+                                type: { type: string, enum: [video, doc] }
+                                body: { type: string, nullable: true }
+                                status: { type: string, enum: [draft, published] }
+                                duration_minutes: { type: integer, nullable: true }
+                                content_ref: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created lesson
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /courses/{courseId}/lessons/{id}:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+            - { name: id, in: path, required: true, schema: { type: string }, description: Lesson ULID }
+        get:
+            tags: [Lessons]
+            summary: Get a lesson
+            responses:
+                '200':
+                    description: The lesson
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Lessons]
+            summary: Update a lesson (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                title: { type: string }
+                                type: { type: string, enum: [video, doc] }
+                                body: { type: string, nullable: true }
+                                status: { type: string, enum: [draft, published] }
+                                duration_minutes: { type: integer, nullable: true }
+                                content_ref: { type: string, nullable: true }
+                                position: { type: integer }
+            responses:
+                '200':
+                    description: Updated lesson
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Lessons]
+            summary: Delete a lesson (owner only)
+            responses:
+                '204': { description: Lesson deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
 components:
     securitySchemes:
         bearerAuth:
@@ -213,6 +462,63 @@ components:
             properties:
                 error: { type: string, example: validation_error }
                 error_description: { type: string, example: Email cannot be blank. }
+        Money:
+            type: object
+            properties:
+                amount_cents: { type: integer, example: 450000 }
+                currency: { type: string, example: ZAR }
+        Category:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                name: { type: string, example: Wealth }
+                slug: { type: string, example: wealth }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Course:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                title: { type: string }
+                slug: { type: string, description: Generated from the title }
+                tagline: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+                status: { type: string, enum: [draft, published, archived] }
+                level: { type: string, nullable: true, enum: [beginner, intermediate, advanced] }
+                category: { $ref: '#/components/schemas/Category' }
+                instructor:
+                    type: object
+                    description: Compact owner view (never exposes the owner's account)
+                    properties:
+                        id: { type: string }
+                        name: { type: string }
+                price: { $ref: '#/components/schemas/Money' }
+                tags: { type: array, items: { type: string } }
+                objectives: { type: array, items: { type: string } }
+                thumbnail: { type: string, nullable: true }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Lesson:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course_id: { type: string, description: Parent course ULID }
+                title: { type: string }
+                body: { type: string, nullable: true }
+                type: { type: string, enum: [video, doc] }
+                status: { type: string, enum: [draft, published] }
+                position: { type: integer }
+                duration_minutes: { type: integer, nullable: true }
+                content_ref: { type: string, nullable: true }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Pagination:
+            type: object
+            properties:
+                current_page: { type: integer, example: 1 }
+                items_per_page: { type: integer, example: 10 }
+                total_items: { type: integer, example: 42 }
+                total_pages: { type: integer, example: 5 }
     responses:
         BadRequest:
             description: Malformed request or invalid JSON
@@ -221,6 +527,11 @@ components:
                     schema: { $ref: '#/components/schemas/Error' }
         Unauthorized:
             description: Missing or invalid credentials
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        Forbidden:
+            description: Authenticated but not permitted (e.g. not the owner, or missing ROLE_TEACHER)
             content:
                 application/json:
                     schema: { $ref: '#/components/schemas/Error' }
