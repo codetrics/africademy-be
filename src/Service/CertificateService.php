@@ -6,9 +6,13 @@ namespace App\Service;
 
 use App\Entity\Certificate;
 use App\Entity\Enrollment;
+use App\Entity\Quiz;
 use App\Entity\User;
+use App\Enum\EnrollmentStatus;
 use App\Exceptions\CertificateException;
 use App\Repository\CertificateRepository;
+use App\Repository\QuizAttemptRepository;
+use App\Repository\QuizRepository;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,6 +25,8 @@ class CertificateService
 
     public function __construct(
         private readonly CertificateRepository $certificateRepository,
+        private readonly QuizRepository $quizRepository,
+        private readonly QuizAttemptRepository $quizAttemptRepository,
         private readonly PdfHelper $pdfHelper,
         private readonly NotificationService $notificationService,
         #[Autowire('%app.base_url%')] private readonly string $baseUrl,
@@ -30,7 +36,9 @@ class CertificateService
     /**
      * Issues a certificate for a completed enrollment when the course offers one.
      * Idempotent: returns the existing certificate if already issued, and null
-     * when the course does not (yet) qualify for a certificate.
+     * when the course does not (yet) qualify — content not finished, or a
+     * quiz-gated course whose quiz has not been passed. Safe to call from both
+     * the content-completion and quiz-pass triggers, in either order.
      */
     public function issueForCompletedEnrollment(Enrollment $enrollment): ?Certificate
     {
@@ -40,9 +48,16 @@ class CertificateService
             return null;
         }
 
-        // Quiz-gated courses only issue once the quiz is passed (wired in a later phase).
-        if ($course->isRequiresQuiz()) {
+        if ($enrollment->getStatus() !== EnrollmentStatus::Completed) {
             return null;
+        }
+
+        if ($course->isRequiresQuiz()) {
+            $quiz = $this->quizRepository->findOneByCourse($course);
+
+            if (!$quiz instanceof Quiz || !$this->quizAttemptRepository->hasPassingAttempt($enrollment->getStudent(), $quiz)) {
+                return null;
+            }
         }
 
         $existing = $this->certificateRepository->findOneByEnrollment($enrollment);

@@ -698,6 +698,115 @@ paths:
                                     valid: { type: boolean, example: true }
                                     certificate: { $ref: '#/components/schemas/Certificate' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/quiz:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Quiz]
+            summary: Get the course's quiz (take-view)
+            description: Returns the quiz with its questions and choices. Correct-answer flags are never included.
+            responses:
+                '200':
+                    description: The quiz
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    quiz: { $ref: '#/components/schemas/Quiz' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Quiz]
+            summary: Create or replace the course's quiz (owner only)
+            description: Atomically replaces the course's quiz definition. Each question must have exactly one correct choice. Existing attempts are kept as history.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title, questions]
+                            properties:
+                                title: { type: string }
+                                pass_threshold_percent: { type: integer, minimum: 1, maximum: 100, default: 70 }
+                                questions:
+                                    type: array
+                                    items:
+                                        type: object
+                                        required: [text, choices]
+                                        properties:
+                                            text: { type: string }
+                                            choices:
+                                                type: array
+                                                items:
+                                                    type: object
+                                                    required: [text, is_correct]
+                                                    properties:
+                                                        text: { type: string }
+                                                        is_correct: { type: boolean }
+            responses:
+                '200':
+                    description: The saved quiz
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    quiz: { $ref: '#/components/schemas/Quiz' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /courses/{id}/quiz/attempts:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Quiz]
+            summary: List my attempts at this course's quiz (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: My quiz attempts
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    attempts:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/QuizAttempt' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Quiz]
+            summary: Submit answers to the course's quiz
+            description: Grades the submission and records the attempt. The student must be enrolled. Passing the quiz when the course content is also complete issues the certificate.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [answers]
+                            properties:
+                                answers:
+                                    type: object
+                                    description: 'Map of question ULID to the chosen choice ULID'
+                                    additionalProperties: { type: string }
+            responses:
+                '201':
+                    description: The graded attempt
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    attempt: { $ref: '#/components/schemas/QuizAttempt' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /courses/{id}/purchase:
         post:
             tags: [Orders]
@@ -1402,6 +1511,47 @@ components:
                 course_title: { type: string, description: Course title at issue time }
                 instructor_name: { type: string, description: Instructor name at issue time }
                 created_at: { type: integer, description: Unix timestamp (issued-at) }
+                updated_at: { type: integer, description: Unix timestamp }
+        Choice:
+            type: object
+            description: 'A possible answer. The correct-answer flag is never exposed to students.'
+            properties:
+                id: { type: string, description: ULID public identifier }
+                text: { type: string }
+                position: { type: integer }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Question:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                text: { type: string }
+                type: { type: string, enum: [single_choice] }
+                position: { type: integer }
+                choices: { type: array, items: { $ref: '#/components/schemas/Choice' } }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Quiz:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course_id: { type: string, description: Course ULID }
+                title: { type: string }
+                pass_threshold_percent: { type: integer, minimum: 1, maximum: 100, description: 'Minimum score to pass', example: 70 }
+                questions: { type: array, items: { $ref: '#/components/schemas/Question' } }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        QuizAttempt:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                score_percent: { type: integer, description: 'Percentage of questions answered correctly' }
+                passed: { type: boolean }
+                answers:
+                    type: object
+                    description: 'Map of question ULID to the chosen choice ULID'
+                    additionalProperties: { type: string }
+                created_at: { type: integer, description: Unix timestamp (submitted-at) }
                 updated_at: { type: integer, description: Unix timestamp }
         LearnLesson:
             allOf:
