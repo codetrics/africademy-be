@@ -104,6 +104,18 @@ class Course
     private bool $includedInSubscription = false;
 
     #[Expose]
+    #[SerializedName('certificate_enabled')]
+    #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
+    #[Type("boolean")]
+    private bool $certificateEnabled = false;
+
+    #[Expose]
+    #[SerializedName('requires_quiz')]
+    #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
+    #[Type("boolean")]
+    private bool $requiresQuiz = false;
+
+    #[Expose]
     #[SerializedName('rating_average')]
     #[ORM\Column(type: Types::FLOAT, options: ['default' => 0])]
     #[Type("float")]
@@ -319,6 +331,28 @@ class Course
     public function setIncludedInSubscription(bool $includedInSubscription): static
     {
         $this->includedInSubscription = $includedInSubscription;
+        return $this;
+    }
+
+    public function isCertificateEnabled(): bool
+    {
+        return $this->certificateEnabled;
+    }
+
+    public function setCertificateEnabled(bool $certificateEnabled): static
+    {
+        $this->certificateEnabled = $certificateEnabled;
+        return $this;
+    }
+
+    public function isRequiresQuiz(): bool
+    {
+        return $this->requiresQuiz;
+    }
+
+    public function setRequiresQuiz(bool $requiresQuiz): static
+    {
+        $this->requiresQuiz = $requiresQuiz;
         return $this;
     }
 

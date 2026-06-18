@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         acl \
         ca-certificates \
         default-mysql-client \
+        chromium \
+        fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install -j"$(nproc)" \
@@ -40,6 +42,11 @@ ENV APACHE_RUN_USER=${APP_USER}
 ENV APACHE_RUN_GROUP=${APP_USER}
 ENV NVM_DIR=/home/${APP_USER}/.nvm
 ENV HOME=/home/${APP_USER}
+
+# Browsershot renders certificate PDFs through the system Chromium; puppeteer
+# must not download its own bundled build during `npm install`.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 

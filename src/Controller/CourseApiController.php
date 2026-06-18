@@ -432,6 +432,14 @@ final class CourseApiController extends AbstractController
             $course->setIncludedInSubscription((bool) $data['included_in_subscription']);
         }
 
+        if (array_key_exists('certificate_enabled', $data)) {
+            $course->setCertificateEnabled((bool) $data['certificate_enabled']);
+        }
+
+        if (array_key_exists('requires_quiz', $data)) {
+            $course->setRequiresQuiz((bool) $data['requires_quiz']);
+        }
+
         return null;
     }
 

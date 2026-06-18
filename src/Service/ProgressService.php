@@ -30,6 +30,7 @@ class ProgressService
         private readonly EnrollmentRepository $enrollmentRepository,
         private readonly LessonProgressRepository $lessonProgressRepository,
         private readonly AccessService $accessService,
+        private readonly CertificateService $certificateService,
         private readonly EntityManagerInterface $entityManager,
     ) {
     }
@@ -56,6 +57,11 @@ class ProgressService
         } catch (Exception $exception) {
             $this->entityManager->rollback();
             throw $exception;
+        }
+
+        // Completing the final lesson issues the course certificate (when offered).
+        if ($enrollment->getStatus() === EnrollmentStatus::Completed) {
+            $this->certificateService->issueForCompletedEnrollment($enrollment);
         }
 
         return $this->buildProgress($enrollment);

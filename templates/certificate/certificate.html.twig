@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            color: #1f2937;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .sheet {
+            width: 297mm;
+            height: 210mm;
+            padding: 18mm;
+            position: relative;
+        }
+
+        .frame {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #1d4ed8;
+            outline: 6px solid #eff6ff;
+            outline-offset: -10px;
+            padding: 16mm 20mm;
+            display: flex;
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .brand {
+            font-size: 15px;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: #1d4ed8;
+            font-family: Arial, Helvetica, sans-serif;
+            font-weight: bold;
+        }
+
+        .title {
+            margin-top: 14mm;
+            font-size: 40px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: #111827;
+        }
+
+        .subtitle {
+            margin-top: 6mm;
+            font-size: 15px;
+            color: #6b7280;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .recipient {
+            margin-top: 10mm;
+            font-size: 38px;
+            color: #1d4ed8;
+            border-bottom: 1px solid #d1d5db;
+            display: inline-block;
+            padding: 0 12mm 4mm;
+            align-self: center;
+        }
+
+        .course {
+            margin-top: 9mm;
+            font-size: 22px;
+            color: #111827;
+        }
+
+        .course strong {
+            display: block;
+            margin-top: 3mm;
+            font-size: 26px;
+        }
+
+        .footer {
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .footer .block {
+            font-size: 13px;
+            color: #374151;
+            text-align: center;
+            min-width: 70mm;
+        }
+
+        .footer .line {
+            border-top: 1px solid #9ca3af;
+            padding-top: 2mm;
+            margin-top: 12mm;
+        }
+
+        .footer .name {
+            font-size: 16px;
+            color: #111827;
+        }
+
+        .credential {
+            margin-top: 8mm;
+            font-size: 11px;
+            color: #9ca3af;
+            font-family: Arial, Helvetica, sans-serif;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+<div class="sheet">
+    <div class="frame">
+        <div class="brand">Africademy</div>
+        <div class="title">Certificate of Completion</div>
+        <div class="subtitle">This is to certify that</div>
+        <div class="recipient">{{ student_name }}</div>
+        <div class="course">
+            has successfully completed the course
+            <strong>{{ course_title }}</strong>
+        </div>
+
+        <div class="footer">
+            <div class="block">
+                <div class="line">
+                    <span class="name">{{ instructor_name }}</span><br>
+                    Instructor
+                </div>
+            </div>
+            <div class="block">
+                <div class="line">
+                    <span class="name">{{ issued_at|date('j F Y') }}</span><br>
+                    Date Issued
+                </div>
+            </div>
+        </div>
+
+        <div class="credential">
+            Credential ID: {{ credential_id }} &nbsp;&middot;&nbsp; Verify at {{ verify_url }}
+        </div>
+    </div>
+</div>
+</body>
+</html>

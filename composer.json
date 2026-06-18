@@ -15,6 +15,7 @@
         "jms/serializer-bundle": "^5.5",
         "knplabs/knp-paginator-bundle": "^6.10",
         "lexik/jwt-authentication-bundle": "^3.2",
+        "spatie/browsershot": "^5.4",
         "symfony/apache-pack": "^1",
         "symfony/console": "8.1.*",
         "symfony/dotenv": "8.1.*",

@@ -17,6 +17,7 @@
         "build": "encore production --progress"
     },
     "dependencies": {
+        "puppeteer": "^24.43.1",
         "swagger-ui-dist": "^5.32.6"
     }
 }

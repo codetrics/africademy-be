@@ -644,6 +644,60 @@ paths:
             responses:
                 '204': { description: Review deleted }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /certificates:
+        get:
+            tags: [Certificate]
+            summary: List my certificates (paginated)
+            description: Certificates are issued automatically when a student completes a certificate-enabled course.
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: My certificates
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    certificates:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Certificate' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /certificates/{id}/download:
+        get:
+            tags: [Certificate]
+            summary: Download my certificate as a PDF
+            description: Streams the certificate as an inline landscape A4 PDF. Owner only.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Certificate ULID }
+            responses:
+                '200':
+                    description: The certificate PDF
+                    content:
+                        application/pdf:
+                            schema: { type: string, format: binary }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /certificates/verify/{credentialId}:
+        get:
+            tags: [Certificate]
+            summary: Publicly verify a certificate by its credential ID
+            description: Public endpoint (no authentication). Returns the certificate's issue-time snapshot so a third party can confirm it is genuine. No PDF is returned.
+            security: []
+            parameters:
+                - { name: credentialId, in: path, required: true, schema: { type: string }, description: '32-character hex credential token' }
+            responses:
+                '200':
+                    description: The certificate is valid
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    valid: { type: boolean, example: true }
+                                    certificate: { $ref: '#/components/schemas/Certificate' }
+                '404': { $ref: '#/components/responses/NotFound' }
     /courses/{id}/purchase:
         post:
             tags: [Orders]
@@ -1278,6 +1332,8 @@ components:
                 is_free: { type: boolean }
                 is_purchasable: { type: boolean }
                 included_in_subscription: { type: boolean }
+                certificate_enabled: { type: boolean, description: 'Whether completing the course issues a certificate' }
+                requires_quiz: { type: boolean, description: 'Whether completion requires passing a quiz (defers auto-issuing until the quiz gate exists)' }
                 rating_average: { type: number, format: float, description: 'Cached average of all review ratings (0 when none)', example: 4.5 }
                 rating_count: { type: integer, description: 'Cached number of reviews', example: 12 }
                 enrollment_count: { type: integer, description: 'Cached number of active enrollments', example: 87 }
@@ -1334,6 +1390,18 @@ components:
                 rating: { type: integer, minimum: 1, maximum: 5 }
                 body: { type: string, nullable: true, description: 'Optional written review (max 2000 chars)' }
                 created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Certificate:
+            type: object
+            description: 'Snapshot fields are captured at issue time so a later rename never alters an issued certificate.'
+            properties:
+                id: { type: string, description: ULID public identifier }
+                credential_id: { type: string, description: 'Public, URL-safe credential token used for verification', example: 6978e70cdc378abed468f32ac2ab63df }
+                course_id: { type: string, description: Course ULID }
+                student_name: { type: string, description: Recipient name at issue time }
+                course_title: { type: string, description: Course title at issue time }
+                instructor_name: { type: string, description: Instructor name at issue time }
+                created_at: { type: integer, description: Unix timestamp (issued-at) }
                 updated_at: { type: integer, description: Unix timestamp }
         LearnLesson:
             allOf:
