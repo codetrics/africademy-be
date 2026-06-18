@@ -1,0 +1,18 @@
+{% extends 'email/base.html.twig' %}
+
+{% block title %}{{ heading|default('Africademy') }}{% endblock %}
+
+{% block content %}
+    {% if heading is defined %}
+        <h1 style="margin:0 0 16px; font-size:20px;">{{ heading }}</h1>
+    {% endif %}
+    {% if greeting is defined %}
+        <p style="margin:0 0 16px;">{{ greeting }}</p>
+    {% endif %}
+    <p style="margin:0 0 16px; line-height:1.5;">{{ body }}</p>
+    {% if action_url is defined and action_label is defined %}
+        <p style="margin:24px 0;">
+            <a href="{{ action_url }}" style="background:#e65200; color:#ffffff; text-decoration:none; padding:12px 24px; border-radius:9999px; display:inline-block; font-weight:bold;">{{ action_label }}</a>
+        </p>
+    {% endif %}
+{% endblock %}

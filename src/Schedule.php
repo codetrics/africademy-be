@@ -29,6 +29,10 @@ final class Schedule implements ScheduleProviderInterface
                     '0 3 * * *',
                     new RunCommandMessage('cache:clear --env=prod --no-debug'),
                 ),
+                RecurringMessage::every(
+                    '1 minute',
+                    new RunCommandMessage('app:notifications:run'),
+                ),
             );
     }
 }

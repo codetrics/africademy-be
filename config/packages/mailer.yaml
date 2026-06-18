@@ -1,0 +1,7 @@
+parameters:
+    app.default_mailer_dsn: 'null://null'
+
+framework:
+    mailer:
+        # Defaults to a no-op transport; production sets a real MAILER_DSN.
+        dsn: '%env(default:app.default_mailer_dsn:MAILER_DSN)%'

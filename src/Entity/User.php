@@ -85,6 +85,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Type("DateTime<'U'>")]
     private DateTime $updatedAt;
 
+    #[Expose]
+    #[SerializedName('email_verified_at')]
+    #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
+    #[Type("DateTime<'U'>")]
+    private ?DateTime $emailVerifiedAt = null;
+
     public function __construct()
     {
         $this->publicId = new Ulid();
@@ -203,6 +209,25 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         $this->updatedAt = $updatedAt;
         return $this;
+    }
+
+    public function getEmailVerifiedAt(): ?DateTime
+    {
+        return $this->emailVerifiedAt;
+    }
+
+    public function setEmailVerifiedAt(?DateTime $emailVerifiedAt): static
+    {
+        $this->emailVerifiedAt = $emailVerifiedAt;
+        return $this;
+    }
+
+    #[VirtualProperty(name: 'email_verified')]
+    #[SerializedName('email_verified')]
+    #[Type("boolean")]
+    public function isEmailVerified(): bool
+    {
+        return !is_null($this->emailVerifiedAt);
     }
 
     /**

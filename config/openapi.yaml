@@ -90,6 +90,81 @@ paths:
                                     token: { type: string }
                                     refresh_token: { type: string }
                 '401': { $ref: '#/components/responses/Unauthorized' }
+    /auth/verify-email/request:
+        post:
+            tags: [Auth]
+            summary: Request an email-verification code
+            description: Always returns 200 (does not reveal whether the email exists).
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email]
+                            properties:
+                                email: { type: string, format: email }
+            responses:
+                '200': { description: Code sent if the email exists }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/verify-email:
+        post:
+            tags: [Auth]
+            summary: Verify an email with a code
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, code]
+                            properties:
+                                email: { type: string, format: email }
+                                code: { type: string, example: '314832' }
+            responses:
+                '200': { description: Email verified }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/password/forgot:
+        post:
+            tags: [Auth]
+            summary: Request a password-reset code
+            description: Always returns 200 (does not reveal whether the email exists).
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email]
+                            properties:
+                                email: { type: string, format: email }
+            responses:
+                '200': { description: Code sent if the email exists }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/password/reset:
+        post:
+            tags: [Auth]
+            summary: Reset a password with a code
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, code, password]
+                            properties:
+                                email: { type: string, format: email }
+                                code: { type: string, example: '289430' }
+                                password: { type: string, format: password, minLength: 8 }
+            responses:
+                '200': { description: Password updated }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
     /profile:
         get:
             tags: [Profile]
@@ -572,6 +647,8 @@ components:
                 email: { type: string, format: email }
                 roles: { type: array, items: { type: string } }
                 status: { type: string, enum: [active, suspended] }
+                email_verified: { type: boolean }
+                email_verified_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
                 profile: { $ref: '#/components/schemas/Profile' }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }

@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Entity\UserLogType;
 use App\Entity\UserProfile;
 use App\Exceptions\JsonExceptionResponse;
 use App\Service\Helper\Tools;
 use App\Service\RegistrationService;
 use App\Service\SerializerService;
+use App\Service\UserLogService;
+use App\Service\VerificationService;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -36,6 +39,8 @@ final class AuthApiController extends AbstractController
         SerializerService $serializerService,
         ValidatorInterface $validator,
         RateLimiterFactoryInterface $registrationLimiter,
+        UserLogService $userLogService,
+        VerificationService $verificationService,
     ): JsonResponse {
         if (!$registrationLimiter->create($request->getClientIp())->consume()->isAccepted()) {
             return new JsonExceptionResponse(
@@ -98,6 +103,16 @@ final class AuthApiController extends AbstractController
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
+
+        $verificationService->requestEmailVerification($user);
+
+        $userLogService->log(
+            UserLogType::REGISTER,
+            'User registered',
+            $user->getEmail(),
+            $request->headers->get('User-Agent'),
+            $request->getClientIp(),
+        );
 
         $userJSON = $serializerService->serialize($user);
 
