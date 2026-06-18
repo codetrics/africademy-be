@@ -33,6 +33,10 @@ final class Schedule implements ScheduleProviderInterface
                     '1 minute',
                     new RunCommandMessage('app:notifications:run'),
                 ),
+                RecurringMessage::cron(
+                    '0 4 * * *',
+                    new RunCommandMessage('app:subscriptions:bill'),
+                ),
             );
     }
 }

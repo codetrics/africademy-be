@@ -10,16 +10,18 @@ use App\Entity\User;
 use App\Enum\EntitlementSource;
 use App\Enum\EntitlementStatus;
 use App\Repository\EntitlementRepository;
+use App\Repository\SubscriptionRepository;
 use DateTime;
 
 /**
- * Single access gate: a user can access a course if it is free or they hold a
- * valid entitlement. (Subscription-included access is added in a later phase.)
+ * Single access gate: a user can access a course if it is free, they hold a
+ * valid entitlement, or it is included in their active subscription.
  */
 class AccessService
 {
     public function __construct(
         private readonly EntitlementRepository $entitlementRepository,
+        private readonly SubscriptionRepository $subscriptionRepository,
     ) {
     }
 
@@ -30,8 +32,12 @@ class AccessService
         }
 
         $entitlement = $this->entitlementRepository->findOneByUserAndCourse($user, $course);
+        if ($entitlement instanceof Entitlement && $entitlement->isActive() && !$entitlement->isExpired()) {
+            return true;
+        }
 
-        return $entitlement instanceof Entitlement && $entitlement->isActive() && !$entitlement->isExpired();
+        return $course->isIncludedInSubscription()
+            && !is_null($this->subscriptionRepository->findActiveByUser($user));
     }
 
     public function grant(User $user, Course $course, EntitlementSource $source, ?DateTime $expiresAt = null): Entitlement

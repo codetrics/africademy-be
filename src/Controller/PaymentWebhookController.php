@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Service\OrderService;
+use App\Service\PaymentMethodService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,9 +19,17 @@ use Symfony\Component\Routing\Attribute\Route;
 final class PaymentWebhookController extends AbstractController
 {
     #[Route('/webhooks/payfast/notify', name: 'payfast_itn', methods: [Request::METHOD_POST])]
-    public function payfastNotify(Request $request, OrderService $orderService): Response
-    {
-        $orderService->handlePayFastItn($request->request->all());
+    public function payfastNotify(
+        Request $request,
+        PaymentMethodService $paymentMethodService,
+        OrderService $orderService,
+    ): Response {
+        $data = $request->request->all();
+
+        // Tokenization (card setup) ITNs are routed to payment methods; everything else to orders.
+        if (!$paymentMethodService->handleTokenizationItn($data)) {
+            $orderService->handlePayFastItn($data);
+        }
 
         return new Response('', Response::HTTP_OK);
     }

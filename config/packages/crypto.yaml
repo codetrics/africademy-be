@@ -1,0 +1,5 @@
+parameters:
+    # Secret used to derive the libsodium key for encrypting gateway tokens.
+    # Any string works (it is hashed to a 32-byte key). Production sets the env.
+    app.sodium_aead_key: '%env(default:app_sodium_secret_default:APP_SODIUM_AEAD_KEY)%'
+    app_sodium_secret_default: 'dev-only-africademy-token-secret-change-me'

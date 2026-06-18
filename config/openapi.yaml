@@ -649,6 +649,138 @@ paths:
                 '404': { $ref: '#/components/responses/NotFound' }
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
+    /plans:
+        get:
+            tags: [Subscription]
+            summary: List active subscription plans
+            responses:
+                '200':
+                    description: Plans
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    plans:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/SubscriptionPlan' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /payment-methods/setup:
+        post:
+            tags: [PaymentMethods]
+            summary: Start adding a payment method (PayFast tokenization)
+            description: Returns signed PayFast tokenization checkout fields. The token is captured via the ITN webhook.
+            responses:
+                '200':
+                    description: PayFast tokenization checkout
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    payfast:
+                                        type: object
+                                        properties:
+                                            url: { type: string }
+                                            fields: { type: object, additionalProperties: { type: string } }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /payment-methods:
+        get:
+            tags: [PaymentMethods]
+            summary: List my active payment methods
+            responses:
+                '200':
+                    description: Payment methods
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    payment_methods:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/PaymentMethod' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /payment-methods/{id}/default:
+        patch:
+            tags: [PaymentMethods]
+            summary: Set a payment method as default
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Payment method ULID }
+            responses:
+                '200':
+                    description: Updated payment method
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /payment-methods/{id}:
+        delete:
+            tags: [PaymentMethods]
+            summary: Remove a payment method
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Payment method ULID }
+            responses:
+                '204': { description: Removed }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /subscriptions:
+        post:
+            tags: [Subscription]
+            summary: Subscribe to a plan (charges the chosen card now)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [plan_id, payment_method_id]
+                            properties:
+                                plan_id: { type: string, description: Plan ULID }
+                                payment_method_id: { type: string, description: Payment method ULID }
+            responses:
+                '201':
+                    description: Active subscription
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    subscription: { $ref: '#/components/schemas/Subscription' }
+                '402': { $ref: '#/components/responses/Forbidden' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /subscription:
+        get:
+            tags: [Subscription]
+            summary: Get my current subscription
+            responses:
+                '200':
+                    description: The subscription
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    subscription: { $ref: '#/components/schemas/Subscription' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /subscriptions/{id}/cancel:
+        post:
+            tags: [Subscription]
+            summary: Cancel a subscription at period end
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Subscription ULID }
+            responses:
+                '200':
+                    description: Updated subscription
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    subscription: { $ref: '#/components/schemas/Subscription' }
+                '404': { $ref: '#/components/responses/NotFound' }
     /courses/{courseId}/lessons/{id}/complete:
         parameters:
             - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
@@ -845,6 +977,39 @@ components:
                 reason: { type: string, nullable: true }
                 status: { type: string, enum: [pending, approved, rejected] }
                 resolved_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        SubscriptionPlan:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                name: { type: string, example: Premium }
+                slug: { type: string, example: premium-monthly }
+                price: { $ref: '#/components/schemas/Money' }
+                interval: { type: string, enum: [monthly, annual] }
+                is_active: { type: boolean }
+        PaymentMethod:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                brand: { type: string, example: visa }
+                last4: { type: string, example: '4242' }
+                exp_month: { type: string, nullable: true, example: '12' }
+                exp_year: { type: string, nullable: true, example: '2030' }
+                is_default: { type: boolean }
+                status: { type: string, enum: [active, deleted] }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Subscription:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                plan: { $ref: '#/components/schemas/SubscriptionPlan' }
+                payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+                status: { type: string, enum: [active, past_due, cancelled, expired] }
+                current_period_start: { type: integer, description: Unix timestamp }
+                current_period_end: { type: integer, description: Unix timestamp }
+                cancel_at_period_end: { type: boolean }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
     responses:

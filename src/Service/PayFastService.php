@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Order;
+use App\Entity\User;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -19,6 +20,8 @@ class PayFastService
     private const string SANDBOX_PROCESS_URL = 'https://sandbox.payfast.co.za/eng/process';
     private const string LIVE_PROCESS_URL = 'https://www.payfast.co.za/eng/process';
     private const int ITEM_NAME_MAX_LENGTH = 100;
+    private const int SETUP_AMOUNT_CENTS = 500;
+    public const string TOKENIZATION_MARKER = 'pm_setup';
 
     public function __construct(
         #[Autowire('%app.payfast.merchant_id%')] private readonly string $merchantId,
@@ -55,6 +58,41 @@ class PayFastService
             'url' => $this->sandbox ? self::SANDBOX_PROCESS_URL : self::LIVE_PROCESS_URL,
             'fields' => $fields,
         ];
+    }
+
+    /**
+     * Tokenization checkout (subscription_type=2): captures a card and returns a
+     * reusable token via ITN. Tagged so the webhook routes it to payment methods.
+     *
+     * @return array{url: string, fields: array<string, string>}
+     */
+    public function buildTokenizationCheckout(User $user, string $merchantPaymentId): array
+    {
+        $fields = [
+            'merchant_id' => $this->merchantId,
+            'merchant_key' => $this->merchantKey,
+            'return_url' => $this->returnUrl,
+            'cancel_url' => $this->cancelUrl,
+            'notify_url' => $this->notifyUrl,
+            'm_payment_id' => $merchantPaymentId,
+            'amount' => $this->formatAmount(self::SETUP_AMOUNT_CENTS),
+            'item_name' => 'Card setup',
+            'subscription_type' => '2',
+            'custom_str1' => self::TOKENIZATION_MARKER,
+            'custom_str2' => (string) $user->getPublicId(),
+        ];
+
+        $fields['signature'] = $this->generateSignature($fields);
+
+        return [
+            'url' => $this->sandbox ? self::SANDBOX_PROCESS_URL : self::LIVE_PROCESS_URL,
+            'fields' => $fields,
+        ];
+    }
+
+    public function isSandbox(): bool
+    {
+        return $this->sandbox;
     }
 
     /**
@@ -104,5 +142,21 @@ class PayFastService
     public function formatAmount(int $amountCents): string
     {
         return number_format($amountCents / 100, 2, '.', '');
+    }
+
+    /**
+     * Charges a stored token (adhoc recurring charge). In sandbox this returns a
+     * simulated success; a live charge requires symfony/http-client and is not
+     * enabled in this build.
+     *
+     * @return array{status: string, pf_payment_id: ?string}
+     */
+    public function chargeToken(#[\SensitiveParameter] string $token, int $amountCents, string $itemName): array
+    {
+        if ($this->sandbox) {
+            return ['status' => 'success', 'pf_payment_id' => 'SIM-' . bin2hex(random_bytes(6))];
+        }
+
+        throw new \RuntimeException('Live PayFast adhoc charging requires symfony/http-client and is not enabled in this build.');
     }
 }

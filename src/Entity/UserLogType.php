@@ -33,6 +33,13 @@ class UserLogType
     public const string PURCHASE_INITIATED = 'purchase_initiated';
     public const string PAYMENT_COMPLETED = 'payment_completed';
     public const string REFUND_REQUESTED = 'refund_requested';
+    public const string PAYMENT_METHOD_ADDED = 'payment_method_added';
+    public const string PAYMENT_METHOD_REMOVED = 'payment_method_removed';
+    public const string PAYMENT_METHOD_DEFAULT = 'payment_method_default';
+    public const string SUBSCRIPTION_CREATED = 'subscription_created';
+    public const string SUBSCRIPTION_CANCELLED = 'subscription_cancelled';
+    public const string SUBSCRIPTION_RENEWED = 'subscription_renewed';
+    public const string SUBSCRIPTION_PAYMENT_FAILED = 'subscription_payment_failed';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
