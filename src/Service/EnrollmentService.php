@@ -56,6 +56,7 @@ class EnrollmentService
         $enrollment = new Enrollment();
         $enrollment->setStudent($student);
         $enrollment->setCourse($course);
+        $course->adjustEnrollmentCount(1);
 
         $this->entityManager->beginTransaction();
         try {
@@ -85,6 +86,7 @@ class EnrollmentService
 
     public function unenroll(Enrollment $enrollment): void
     {
+        $enrollment->getCourse()->adjustEnrollmentCount(-1);
         $this->enrollmentRepository->remove($enrollment, true);
     }
 
@@ -103,6 +105,7 @@ class EnrollmentService
         $enrollment = new Enrollment();
         $enrollment->setStudent($student);
         $enrollment->setCourse($course);
+        $course->adjustEnrollmentCount(1);
         $this->enrollmentRepository->save($enrollment, true);
 
         return $enrollment;

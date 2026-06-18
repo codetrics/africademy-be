@@ -103,6 +103,24 @@ class Course
     #[Type("boolean")]
     private bool $includedInSubscription = false;
 
+    #[Expose]
+    #[SerializedName('rating_average')]
+    #[ORM\Column(type: Types::FLOAT, options: ['default' => 0])]
+    #[Type("float")]
+    private float $ratingAverage = 0.0;
+
+    #[Expose]
+    #[SerializedName('rating_count')]
+    #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
+    #[Type("integer")]
+    private int $ratingCount = 0;
+
+    #[Expose]
+    #[SerializedName('enrollment_count')]
+    #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
+    #[Type("integer")]
+    private int $enrollmentCount = 0;
+
     /**
      * @var string[]
      */
@@ -301,6 +319,39 @@ class Course
     public function setIncludedInSubscription(bool $includedInSubscription): static
     {
         $this->includedInSubscription = $includedInSubscription;
+        return $this;
+    }
+
+    public function getRatingAverage(): float
+    {
+        return $this->ratingAverage;
+    }
+
+    public function setRatingAverage(float $ratingAverage): static
+    {
+        $this->ratingAverage = $ratingAverage;
+        return $this;
+    }
+
+    public function getRatingCount(): int
+    {
+        return $this->ratingCount;
+    }
+
+    public function setRatingCount(int $ratingCount): static
+    {
+        $this->ratingCount = $ratingCount;
+        return $this;
+    }
+
+    public function getEnrollmentCount(): int
+    {
+        return $this->enrollmentCount;
+    }
+
+    public function adjustEnrollmentCount(int $delta): static
+    {
+        $this->enrollmentCount = max(0, $this->enrollmentCount + $delta);
         return $this;
     }
 

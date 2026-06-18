@@ -562,6 +562,88 @@ paths:
             responses:
                 '204': { description: Unenrolled }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/reviews:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Review]
+            summary: List a course's reviews (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: The course's reviews
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    reviews:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Review' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Review]
+            summary: Review a course
+            description: The student must be enrolled in the course and may review it only once. Posting refreshes the course's cached rating average and count.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [rating]
+                            properties:
+                                rating: { type: integer, minimum: 1, maximum: 5 }
+                                body: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created review
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    review: { $ref: '#/components/schemas/Review' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /reviews/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Review ULID }
+        patch:
+            tags: [Review]
+            summary: Update my review
+            description: Only the review's author may update it. Recomputes the course's cached rating stats.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                rating: { type: integer, minimum: 1, maximum: 5 }
+                                body: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated review
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    review: { $ref: '#/components/schemas/Review' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Review]
+            summary: Delete my review
+            description: Only the review's author may delete it. Recomputes the course's cached rating stats.
+            responses:
+                '204': { description: Review deleted }
+                '404': { $ref: '#/components/responses/NotFound' }
     /courses/{id}/purchase:
         post:
             tags: [Orders]
@@ -1196,6 +1278,9 @@ components:
                 is_free: { type: boolean }
                 is_purchasable: { type: boolean }
                 included_in_subscription: { type: boolean }
+                rating_average: { type: number, format: float, description: 'Cached average of all review ratings (0 when none)', example: 4.5 }
+                rating_count: { type: integer, description: 'Cached number of reviews', example: 12 }
+                enrollment_count: { type: integer, description: 'Cached number of active enrollments', example: 87 }
                 tags: { type: array, items: { type: string } }
                 objectives: { type: array, items: { type: string } }
                 thumbnail: { type: string, nullable: true }
@@ -1239,6 +1324,16 @@ components:
                 completed_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
                 progress: { $ref: '#/components/schemas/Progress' }
                 created_at: { type: integer, description: Unix timestamp (enrolled-at) }
+                updated_at: { type: integer, description: Unix timestamp }
+        Review:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course_id: { type: string, description: Reviewed course ULID }
+                reviewer: { type: string, description: Display name of the student who wrote the review }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                body: { type: string, nullable: true, description: 'Optional written review (max 2000 chars)' }
+                created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         LearnLesson:
             allOf:
