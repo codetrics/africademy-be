@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\Entity\Enrollment;
 use App\Entity\User;
-use App\Exceptions\EnrollmentException;
+use App\Entity\UserLogType;
 use App\Exceptions\JsonExceptionResponse;
-use App\Service\EnrollmentService;
-use App\Service\ProgressService;
+use App\Exceptions\OrderException;
+use App\Service\OrderService;
+use App\Service\PayFastService;
 use App\Service\ReturnType\PaginationReturnType;
 use App\Service\SerializerService;
+use App\Service\UserLogService;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,21 +23,22 @@ use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Uid\Ulid;
 
-final class EnrollmentApiController extends AbstractController
+final class OrderApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/courses/{id}/enroll',
-        name: 'api_enrollment_create',
+        '/api/{version}/courses/{id}/purchase',
+        name: 'api_order_purchase',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
     #[IsGranted('ROLE_STUDENT')]
-    public function enroll(
+    public function purchase(
         Request $request,
-        EnrollmentService $enrollmentService,
-        ProgressService $progressService,
+        OrderService $orderService,
+        PayFastService $payFastService,
         SerializerService $serializerService,
+        UserLogService $userLogService,
     ): JsonResponse {
         $user = $this->narrowStudent();
         if (!$user instanceof User) {
@@ -44,21 +46,33 @@ final class EnrollmentApiController extends AbstractController
         }
 
         try {
-            $enrollment = $enrollmentService->enroll($user, Ulid::fromString($request->attributes->getString('id')));
-        } catch (EnrollmentException $exception) {
-            return $this->mapEnrollmentException($exception);
+            $order = $orderService->createCoursePurchase($user, Ulid::fromString($request->attributes->getString('id')));
+        } catch (OrderException $exception) {
+            return $this->mapOrderException($exception);
         }
 
+        $userLogService->log(
+            UserLogType::PURCHASE_INITIATED,
+            'Course purchase initiated',
+            $user->getEmail(),
+            $request->headers->get('User-Agent'),
+            $request->getClientIp(),
+            ['order' => (string) $order->getPublicId()],
+        );
+
         $response = new JsonResponse();
-        $response->setData(['enrollment' => $this->enrollmentPayload($enrollment, $progressService, $serializerService)]);
+        $response->setData([
+            'order' => json_decode($serializerService->serialize($order)),
+            'payfast' => $payFastService->buildCheckout($order),
+        ]);
         $response->setStatusCode(Response::HTTP_CREATED);
 
         return $response;
     }
 
     #[Route(
-        '/api/{version}/enrollments',
-        name: 'api_enrollment_list',
+        '/api/{version}/orders',
+        name: 'api_order_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_GET],
@@ -66,8 +80,7 @@ final class EnrollmentApiController extends AbstractController
     #[IsGranted('ROLE_STUDENT')]
     public function list(
         Request $request,
-        EnrollmentService $enrollmentService,
-        ProgressService $progressService,
+        OrderService $orderService,
         PaginatorInterface $paginator,
         SerializerService $serializerService,
     ): JsonResponse {
@@ -77,19 +90,14 @@ final class EnrollmentApiController extends AbstractController
         }
 
         $pagination = $paginator->paginate(
-            $enrollmentService->createStudentEnrollmentsQueryBuilder($user),
+            $orderService->createUserOrdersQueryBuilder($user),
             $request->query->getInt('page', 1),
             $request->query->getInt('limit', 10),
         );
 
-        $enrollments = [];
-        foreach ($pagination->getItems() as $enrollment) {
-            $enrollments[] = $this->enrollmentPayload($enrollment, $progressService, $serializerService);
-        }
-
         $response = new JsonResponse();
         $response->setData([
-            'enrollments' => $enrollments,
+            'orders' => json_decode($serializerService->serialize($pagination->getItems())),
             'pagination' => json_decode($serializerService->serialize(new PaginationReturnType($pagination))),
         ]);
 
@@ -97,8 +105,8 @@ final class EnrollmentApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/enrollments/{id}',
-        name: 'api_enrollment_get',
+        '/api/{version}/orders/{id}',
+        name: 'api_order_get',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_GET],
@@ -106,8 +114,7 @@ final class EnrollmentApiController extends AbstractController
     #[IsGranted('ROLE_STUDENT')]
     public function get(
         Request $request,
-        EnrollmentService $enrollmentService,
-        ProgressService $progressService,
+        OrderService $orderService,
         SerializerService $serializerService,
     ): JsonResponse {
         $user = $this->narrowStudent();
@@ -116,43 +123,51 @@ final class EnrollmentApiController extends AbstractController
         }
 
         try {
-            $enrollment = $enrollmentService->getStudentEnrollment($user, Ulid::fromString($request->attributes->getString('id')));
-        } catch (EnrollmentException $exception) {
-            return $this->mapEnrollmentException($exception);
+            $order = $orderService->getUserOrder($user, Ulid::fromString($request->attributes->getString('id')));
+        } catch (OrderException $exception) {
+            return $this->mapOrderException($exception);
         }
 
         $response = new JsonResponse();
-        $response->setData(['enrollment' => $this->enrollmentPayload($enrollment, $progressService, $serializerService)]);
+        $response->setData(['order' => json_decode($serializerService->serialize($order))]);
 
         return $response;
     }
 
     #[Route(
-        '/api/{version}/enrollments/{id}',
-        name: 'api_enrollment_delete',
+        '/api/{version}/orders/{id}/refund-request',
+        name: 'api_order_refund_request',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
-        methods: [Request::METHOD_DELETE],
+        methods: [Request::METHOD_POST],
     )]
     #[IsGranted('ROLE_STUDENT')]
-    public function unenroll(
+    public function refundRequest(
         Request $request,
-        EnrollmentService $enrollmentService,
+        OrderService $orderService,
+        SerializerService $serializerService,
     ): JsonResponse {
         $user = $this->narrowStudent();
         if (!$user instanceof User) {
             return $this->unauthorized();
         }
 
+        $data = json_decode($request->getContent(), true);
+        $reason = is_array($data) && array_key_exists('reason', $data) && !is_null($data['reason'])
+            ? (string) $data['reason']
+            : null;
+
         try {
-            $enrollment = $enrollmentService->getStudentEnrollment($user, Ulid::fromString($request->attributes->getString('id')));
-        } catch (EnrollmentException $exception) {
-            return $this->mapEnrollmentException($exception);
+            $refundRequest = $orderService->requestRefund($user, Ulid::fromString($request->attributes->getString('id')), $reason);
+        } catch (OrderException $exception) {
+            return $this->mapOrderException($exception);
         }
 
-        $enrollmentService->unenroll($enrollment);
+        $response = new JsonResponse();
+        $response->setData(['refund_request' => json_decode($serializerService->serialize($refundRequest))]);
+        $response->setStatusCode(Response::HTTP_CREATED);
 
-        return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+        return $response;
     }
 
     private function narrowStudent(): ?User
@@ -162,21 +177,7 @@ final class EnrollmentApiController extends AbstractController
         return $user instanceof User ? $user : null;
     }
 
-    /**
-     * Serialized enrollment with its computed progress attached under "progress".
-     */
-    private function enrollmentPayload(
-        Enrollment $enrollment,
-        ProgressService $progressService,
-        SerializerService $serializerService,
-    ): mixed {
-        $payload = json_decode($serializerService->serialize($enrollment));
-        $payload->progress = json_decode($serializerService->serialize($progressService->buildProgress($enrollment)));
-
-        return $payload;
-    }
-
-    private function mapEnrollmentException(EnrollmentException $exception): JsonExceptionResponse
+    private function mapOrderException(OrderException $exception): JsonExceptionResponse
     {
         return new JsonExceptionResponse(
             $exception->getErrorType(),

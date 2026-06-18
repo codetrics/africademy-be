@@ -85,6 +85,24 @@ class Course
     #[Type("App\Entity\Money")]
     private Money $price;
 
+    #[Expose]
+    #[SerializedName('is_free')]
+    #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
+    #[Type("boolean")]
+    private bool $isFree = false;
+
+    #[Expose]
+    #[SerializedName('is_purchasable')]
+    #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
+    #[Type("boolean")]
+    private bool $isPurchasable = false;
+
+    #[Expose]
+    #[SerializedName('included_in_subscription')]
+    #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
+    #[Type("boolean")]
+    private bool $includedInSubscription = false;
+
     /**
      * @var string[]
      */
@@ -250,6 +268,39 @@ class Course
     public function setPrice(Money $price): static
     {
         $this->price = $price;
+        return $this;
+    }
+
+    public function isFree(): bool
+    {
+        return $this->isFree;
+    }
+
+    public function setIsFree(bool $isFree): static
+    {
+        $this->isFree = $isFree;
+        return $this;
+    }
+
+    public function isPurchasable(): bool
+    {
+        return $this->isPurchasable;
+    }
+
+    public function setIsPurchasable(bool $isPurchasable): static
+    {
+        $this->isPurchasable = $isPurchasable;
+        return $this;
+    }
+
+    public function isIncludedInSubscription(): bool
+    {
+        return $this->includedInSubscription;
+    }
+
+    public function setIncludedInSubscription(bool $includedInSubscription): static
+    {
+        $this->includedInSubscription = $includedInSubscription;
         return $this;
     }
 

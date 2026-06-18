@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Entity\Course;
 use App\Entity\Enrollment;
 use App\Entity\User;
 use App\Enum\CourseStatus;
-use App\Enum\PaymentStatus;
+use App\Enum\EntitlementSource;
 use App\Exceptions\EnrollmentException;
 use App\Repository\CourseRepository;
 use App\Repository\EnrollmentRepository;
@@ -21,6 +22,7 @@ class EnrollmentService
     public function __construct(
         private readonly EnrollmentRepository $enrollmentRepository,
         private readonly CourseRepository $courseRepository,
+        private readonly AccessService $accessService,
         private readonly EntityManagerInterface $entityManager,
     ) {
     }
@@ -42,6 +44,13 @@ class EnrollmentService
 
         if (!is_null($this->enrollmentRepository->findOneByStudentAndCourse($student, $course))) {
             throw EnrollmentException::alreadyEnrolled();
+        }
+
+        // Free courses grant access on enrollment; paid courses require a prior purchase.
+        if ($course->isFree()) {
+            $this->accessService->grant($student, $course, EntitlementSource::Free);
+        } elseif (!$this->accessService->hasAccess($student, $course)) {
+            throw EnrollmentException::purchaseRequired();
         }
 
         $enrollment = new Enrollment();
@@ -74,24 +83,29 @@ class EnrollmentService
         return $enrollment;
     }
 
-    /**
-     * Marks the enrollment as paid. Idempotent — a paid enrollment is returned unchanged.
-     */
-    public function markPaid(Enrollment $enrollment): Enrollment
-    {
-        if ($enrollment->isPaid()) {
-            return $enrollment;
-        }
-
-        $enrollment->setPaymentStatus(PaymentStatus::Paid);
-        $this->enrollmentRepository->save($enrollment, true);
-
-        return $enrollment;
-    }
-
     public function unenroll(Enrollment $enrollment): void
     {
         $this->enrollmentRepository->remove($enrollment, true);
+    }
+
+    /**
+     * Ensures the student has an enrollment for the course, creating one if
+     * needed. Used after a purchase grants access — no access/published checks.
+     */
+    public function ensureEnrolled(User $student, Course $course): Enrollment
+    {
+        $existing = $this->enrollmentRepository->findOneByStudentAndCourse($student, $course);
+
+        if ($existing instanceof Enrollment) {
+            return $existing;
+        }
+
+        $enrollment = new Enrollment();
+        $enrollment->setStudent($student);
+        $enrollment->setCourse($course);
+        $this->enrollmentRepository->save($enrollment, true);
+
+        return $enrollment;
     }
 
     public function createStudentEnrollmentsQueryBuilder(User $student): QueryBuilder

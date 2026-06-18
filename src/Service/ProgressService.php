@@ -29,6 +29,7 @@ class ProgressService
         private readonly LessonRepository $lessonRepository,
         private readonly EnrollmentRepository $enrollmentRepository,
         private readonly LessonProgressRepository $lessonProgressRepository,
+        private readonly AccessService $accessService,
         private readonly EntityManagerInterface $entityManager,
     ) {
     }
@@ -38,7 +39,7 @@ class ProgressService
      */
     public function markComplete(User $student, Ulid $coursePublicId, Ulid $lessonPublicId): ProgressReturnType
     {
-        $enrollment = $this->resolvePaidEnrollment($student, $coursePublicId);
+        $enrollment = $this->resolveAccessibleEnrollment($student, $coursePublicId);
         $lesson = $this->resolvePublishedLesson($enrollment, $lessonPublicId);
 
         $this->entityManager->beginTransaction();
@@ -65,7 +66,7 @@ class ProgressService
      */
     public function unmarkComplete(User $student, Ulid $coursePublicId, Ulid $lessonPublicId): ProgressReturnType
     {
-        $enrollment = $this->resolvePaidEnrollment($student, $coursePublicId);
+        $enrollment = $this->resolveAccessibleEnrollment($student, $coursePublicId);
         $lesson = $this->resolvePublishedLesson($enrollment, $lessonPublicId);
 
         $this->entityManager->beginTransaction();
@@ -94,7 +95,7 @@ class ProgressService
      */
     public function getLearnView(User $student, Ulid $coursePublicId): array
     {
-        $enrollment = $this->resolvePaidEnrollment($student, $coursePublicId);
+        $enrollment = $this->resolveAccessibleEnrollment($student, $coursePublicId);
         $publishedLessons = $this->lessonRepository->findPublishedByCourseOrdered($enrollment->getCourse());
         $completedIds = array_flip($this->lessonProgressRepository->findCompletedPublishedLessonIds($enrollment));
         $currentLessonId = $this->firstIncompleteLessonId($publishedLessons, $completedIds);
@@ -166,7 +167,7 @@ class ProgressService
     /**
      * @throws EnrollmentException
      */
-    private function resolvePaidEnrollment(User $student, Ulid $coursePublicId): Enrollment
+    private function resolveAccessibleEnrollment(User $student, Ulid $coursePublicId): Enrollment
     {
         $course = $this->courseRepository->findOneByPublicId($coursePublicId);
         if (is_null($course)) {
@@ -178,8 +179,8 @@ class ProgressService
             throw EnrollmentException::enrollmentNotFound();
         }
 
-        if (!$enrollment->isPaid()) {
-            throw EnrollmentException::paymentRequired();
+        if (!$this->accessService->hasAccess($student, $course)) {
+            throw EnrollmentException::purchaseRequired();
         }
 
         return $enrollment;

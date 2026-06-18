@@ -7,7 +7,6 @@ namespace App\Entity;
 use App\Entity\Traits\HasPublicIdTrait;
 use App\Entity\Traits\TimestampableTrait;
 use App\Enum\EnrollmentStatus;
-use App\Enum\PaymentStatus;
 use App\Repository\EnrollmentRepository;
 use DateTime;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -50,9 +49,6 @@ class Enrollment
     #[ORM\Column(enumType: EnrollmentStatus::class)]
     private EnrollmentStatus $status;
 
-    #[ORM\Column(enumType: PaymentStatus::class)]
-    private PaymentStatus $paymentStatus;
-
     #[Expose]
     #[SerializedName('completed_at')]
     #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
@@ -70,7 +66,6 @@ class Enrollment
     {
         $this->initialisePublicId();
         $this->status = EnrollmentStatus::InProgress;
-        $this->paymentStatus = PaymentStatus::Pending;
         $this->lessonProgress = new ArrayCollection();
     }
 
@@ -120,25 +115,6 @@ class Enrollment
         return $this->status->value;
     }
 
-    public function getPaymentStatus(): PaymentStatus
-    {
-        return $this->paymentStatus;
-    }
-
-    public function setPaymentStatus(PaymentStatus $paymentStatus): static
-    {
-        $this->paymentStatus = $paymentStatus;
-        return $this;
-    }
-
-    #[VirtualProperty(name: 'payment_status')]
-    #[SerializedName('payment_status')]
-    #[Type("string")]
-    public function getPaymentStatusValue(): string
-    {
-        return $this->paymentStatus->value;
-    }
-
     public function getCompletedAt(): ?DateTime
     {
         return $this->completedAt;
@@ -148,11 +124,6 @@ class Enrollment
     {
         $this->completedAt = $completedAt;
         return $this;
-    }
-
-    public function isPaid(): bool
-    {
-        return $this->paymentStatus === PaymentStatus::Paid;
     }
 
     /**

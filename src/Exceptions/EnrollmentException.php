@@ -51,9 +51,9 @@ class EnrollmentException extends Exception
         return new self(JsonExceptionResponse::ERROR_NOT_FOUND, Response::HTTP_NOT_FOUND, 'Enrollment not found.');
     }
 
-    public static function paymentRequired(): self
+    public static function purchaseRequired(): self
     {
-        return new self(JsonExceptionResponse::ERROR_PAYMENT_REQUIRED, Response::HTTP_FORBIDDEN, 'This enrollment has not been paid for.');
+        return new self(JsonExceptionResponse::ERROR_PAYMENT_REQUIRED, Response::HTTP_FORBIDDEN, 'You need to purchase this course to access it.');
     }
 
     public static function lessonNotFound(): self

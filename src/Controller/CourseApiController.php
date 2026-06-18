@@ -420,6 +420,18 @@ final class CourseApiController extends AbstractController
             $course->setPrice(new Money($amountCents, $currency));
         }
 
+        if (array_key_exists('is_free', $data)) {
+            $course->setIsFree((bool) $data['is_free']);
+        }
+
+        if (array_key_exists('is_purchasable', $data)) {
+            $course->setIsPurchasable((bool) $data['is_purchasable']);
+        }
+
+        if (array_key_exists('included_in_subscription', $data)) {
+            $course->setIncludedInSubscription((bool) $data['included_in_subscription']);
+        }
+
         return null;
     }
 

@@ -30,6 +30,9 @@ class UserLogType
     public const string PASSWORD_RESET_REQUEST = 'password_reset_request';
     public const string PASSWORD_RESET = 'password_reset';
     public const string PROFILE_UPDATE = 'profile_update';
+    public const string PURCHASE_INITIATED = 'purchase_initiated';
+    public const string PAYMENT_COMPLETED = 'payment_completed';
+    public const string REFUND_REQUESTED = 'refund_requested';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
