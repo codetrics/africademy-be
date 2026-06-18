@@ -426,6 +426,138 @@ paths:
                 '204': { description: Lesson deleted }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/enroll:
+        post:
+            tags: [Enrollment]
+            summary: Enroll the current student in a course
+            description: Course must be published. Creates a pending (unpaid) enrollment.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '201':
+                    description: Created enrollment
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enrollment: { $ref: '#/components/schemas/Enrollment' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /enrollments:
+        get:
+            tags: [Enrollment]
+            summary: List my enrollments (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: My enrollments
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enrollments:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Enrollment' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /enrollments/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Enrollment ULID }
+        get:
+            tags: [Enrollment]
+            summary: Get one of my enrollments (with progress)
+            responses:
+                '200':
+                    description: The enrollment
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enrollment: { $ref: '#/components/schemas/Enrollment' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Enrollment]
+            summary: Unenroll (deletes the enrollment and its progress)
+            responses:
+                '204': { description: Unenrolled }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /enrollments/{id}/pay:
+        post:
+            tags: [Enrollment]
+            summary: Mark an enrollment as paid (stub — no real gateway)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Enrollment ULID }
+            responses:
+                '200':
+                    description: Paid enrollment
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enrollment: { $ref: '#/components/schemas/Enrollment' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{courseId}/lessons/{id}/complete:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+            - { name: id, in: path, required: true, schema: { type: string }, description: Lesson ULID }
+        post:
+            tags: [Progress]
+            summary: Mark a lesson complete
+            description: Requires a paid enrollment. Any published lesson may be completed in any order.
+            responses:
+                '200':
+                    description: Updated progress
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    progress: { $ref: '#/components/schemas/Progress' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Progress]
+            summary: Undo a lesson completion
+            responses:
+                '200':
+                    description: Updated progress
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    progress: { $ref: '#/components/schemas/Progress' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/learn:
+        get:
+            tags: [Progress]
+            summary: Learn view — ordered published lessons with per-student state
+            description: Requires a paid enrollment.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '200':
+                    description: Lessons with state + overall progress
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    progress: { $ref: '#/components/schemas/Progress' }
+                                    lessons:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/LearnLesson' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
 components:
     securitySchemes:
         bearerAuth:
@@ -519,6 +651,31 @@ components:
                 items_per_page: { type: integer, example: 10 }
                 total_items: { type: integer, example: 42 }
                 total_pages: { type: integer, example: 5 }
+        Progress:
+            type: object
+            properties:
+                progress_percent: { type: integer, example: 50 }
+                completed_count: { type: integer, example: 1 }
+                total_count: { type: integer, description: Published lessons only, example: 2 }
+                current_lesson_id: { type: string, nullable: true, description: 'First incomplete published lesson, or null if all done' }
+                status: { type: string, enum: [in_progress, completed] }
+        Enrollment:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course: { $ref: '#/components/schemas/Course' }
+                status: { type: string, enum: [in_progress, completed] }
+                payment_status: { type: string, enum: [pending, paid] }
+                completed_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                progress: { $ref: '#/components/schemas/Progress' }
+                created_at: { type: integer, description: Unix timestamp (enrolled-at) }
+                updated_at: { type: integer, description: Unix timestamp }
+        LearnLesson:
+            allOf:
+                - { $ref: '#/components/schemas/Lesson' }
+                - type: object
+                  properties:
+                      state: { type: string, enum: [done, current, upcoming] }
     responses:
         BadRequest:
             description: Malformed request or invalid JSON
@@ -537,6 +694,11 @@ components:
                     schema: { $ref: '#/components/schemas/Error' }
         NotFound:
             description: Resource not found
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        Conflict:
+            description: Conflicts with current state (e.g. already enrolled)
             content:
                 application/json:
                     schema: { $ref: '#/components/schemas/Error' }

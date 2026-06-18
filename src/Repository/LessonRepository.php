@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\Course;
 use App\Entity\Lesson;
+use App\Enum\LessonStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Uid\Ulid;
@@ -54,6 +55,17 @@ class LessonRepository extends ServiceEntityRepository
     public function findByCourseOrdered(Course $course): array
     {
         return $this->findBy(['course' => $course], ['position' => 'ASC']);
+    }
+
+    /**
+     * @return Lesson[]
+     */
+    public function findPublishedByCourseOrdered(Course $course): array
+    {
+        return $this->findBy(
+            ['course' => $course, 'status' => LessonStatus::Published],
+            ['position' => 'ASC'],
+        );
     }
 
     public function getNextPosition(Course $course): int
