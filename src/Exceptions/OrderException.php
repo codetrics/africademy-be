@@ -75,4 +75,14 @@ class OrderException extends Exception
     {
         return new self(JsonExceptionResponse::ERROR_CONFLICT, Response::HTTP_CONFLICT, 'You already have access to all courses in this bundle.');
     }
+
+    public static function refundRequestNotFound(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_NOT_FOUND, Response::HTTP_NOT_FOUND, 'Refund request not found.');
+    }
+
+    public static function refundNotActionable(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'This refund request has already been resolved.');
+    }
 }

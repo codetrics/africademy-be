@@ -33,9 +33,10 @@ class RefundRequest
     #[ORM\Column]
     private int $id;
 
-    #[Exclude]
+    #[Expose]
     #[ORM\ManyToOne(targetEntity: Order::class)]
     #[ORM\JoinColumn(name: 'order_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[Type("App\Entity\Order")]
     private Order $order;
 
     #[Exclude]

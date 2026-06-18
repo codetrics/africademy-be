@@ -30,6 +30,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     public const string ROLE_DEFAULT = 'ROLE_STUDENT';
     public const string ROLE_TEACHER = 'ROLE_TEACHER';
+    public const string ROLE_ADMIN = 'ROLE_ADMIN';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

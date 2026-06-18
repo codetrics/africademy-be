@@ -74,6 +74,17 @@ class Order
     #[Type("DateTime<'U'>")]
     private ?DateTime $refundedAt = null;
 
+    #[Exclude]
+    #[ORM\ManyToOne(targetEntity: Coupon::class)]
+    #[ORM\JoinColumn(name: 'coupon_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    private ?Coupon $coupon = null;
+
+    #[Expose]
+    #[SerializedName('discount_amount_cents')]
+    #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
+    #[Type("integer")]
+    private int $discountAmountCents = 0;
+
     public function __construct()
     {
         $this->initialisePublicId();
@@ -182,8 +193,44 @@ class Order
         return $this;
     }
 
+    public function getCoupon(): ?Coupon
+    {
+        return $this->coupon;
+    }
+
+    public function setCoupon(?Coupon $coupon): static
+    {
+        $this->coupon = $coupon;
+        return $this;
+    }
+
+    public function getDiscountAmountCents(): int
+    {
+        return $this->discountAmountCents;
+    }
+
+    public function setDiscountAmountCents(int $discountAmountCents): static
+    {
+        $this->discountAmountCents = $discountAmountCents;
+        return $this;
+    }
+
     public function isPaid(): bool
     {
         return $this->status === OrderStatus::Paid;
+    }
+
+    /**
+     * The courses this order grants access to (the course, or all bundle courses).
+     *
+     * @return Course[]
+     */
+    public function getPurchasedCourses(): array
+    {
+        if (!is_null($this->bundle)) {
+            return $this->bundle->getCourses()->toArray();
+        }
+
+        return is_null($this->course) ? [] : [$this->course];
     }
 }

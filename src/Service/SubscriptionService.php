@@ -31,6 +31,7 @@ class SubscriptionService
         private readonly SubscriptionPaymentRepository $subscriptionPaymentRepository,
         private readonly PayFastService $payFastService,
         private readonly TokenCipher $tokenCipher,
+        private readonly CouponService $couponService,
         private readonly UserLogService $userLogService,
         private readonly EntityManagerInterface $entityManager,
     ) {
@@ -55,7 +56,7 @@ class SubscriptionService
      *
      * @throws SubscriptionException
      */
-    public function subscribe(User $user, Ulid $planPublicId, Ulid $paymentMethodPublicId): Subscription
+    public function subscribe(User $user, Ulid $planPublicId, Ulid $paymentMethodPublicId, ?string $couponCode = null): Subscription
     {
         $plan = $this->subscriptionPlanRepository->findOneByPublicId($planPublicId);
         if (is_null($plan) || !$plan->isActive()) {
@@ -76,7 +77,15 @@ class SubscriptionService
             throw SubscriptionException::chargeFailed();
         }
 
-        $charge = $this->payFastService->chargeToken($token, $plan->getPrice()->getAmountCents(), $plan->getName());
+        // Coupons discount only the first charge.
+        $fullAmount = $plan->getPrice()->getAmountCents();
+        $coupon = is_null($couponCode) || trim($couponCode) === ''
+            ? null
+            : $this->couponService->validate($couponCode, $user, $fullAmount);
+        $discount = is_null($coupon) ? 0 : $this->couponService->computeDiscount($coupon, $fullAmount);
+        $chargeAmount = $fullAmount - $discount;
+
+        $charge = $this->payFastService->chargeToken($token, $chargeAmount, $plan->getName());
         if (($charge['status'] ?? '') !== 'success') {
             throw SubscriptionException::chargeFailed();
         }
@@ -94,7 +103,7 @@ class SubscriptionService
 
         $payment = new SubscriptionPayment();
         $payment->setSubscription($subscription);
-        $payment->setAmount(new Money($plan->getPrice()->getAmountCents(), $plan->getPrice()->getCurrency()));
+        $payment->setAmount(new Money($chargeAmount, $plan->getPrice()->getCurrency()));
         $payment->setStatus(SubscriptionPaymentStatus::Paid);
         $payment->setPeriodStart($periodStart);
         $payment->setPeriodEnd($periodEnd);
@@ -105,6 +114,9 @@ class SubscriptionService
         try {
             $this->subscriptionRepository->save($subscription);
             $this->subscriptionPaymentRepository->save($payment);
+            if (!is_null($coupon)) {
+                $this->couponService->redeem($coupon, $user, $discount, null, $subscription);
+            }
             $this->entityManager->flush();
             $this->entityManager->commit();
         } catch (Exception $exception) {

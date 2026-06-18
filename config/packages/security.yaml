@@ -5,6 +5,7 @@ security:
 
     role_hierarchy:
         ROLE_TEACHER: [ROLE_STUDENT]
+        ROLE_ADMIN: [ROLE_TEACHER]
 
     # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
     providers:

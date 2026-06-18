@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\Subscription;
 use App\Entity\User;
+use App\Exceptions\CouponException;
 use App\Exceptions\JsonExceptionResponse;
 use App\Exceptions\SubscriptionException;
 use App\Service\Helper\Tools;
@@ -74,14 +75,17 @@ final class SubscriptionApiController extends AbstractController
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_REQUEST, 'Invalid identifier.', Response::HTTP_BAD_REQUEST);
         }
 
+        $couponCode = array_key_exists('coupon_code', $data) && !is_null($data['coupon_code']) ? (string) $data['coupon_code'] : null;
+
         try {
             $subscription = $subscriptionService->subscribe(
                 $user,
                 Ulid::fromString((string) $data['plan_id']),
                 Ulid::fromString((string) $data['payment_method_id']),
+                $couponCode,
             );
-        } catch (SubscriptionException $exception) {
-            return $this->mapSubscriptionException($exception);
+        } catch (SubscriptionException | CouponException $exception) {
+            return new JsonExceptionResponse($exception->getErrorType(), $exception->getMessage(), $exception->getStatusCode());
         }
 
         $response = new JsonResponse();

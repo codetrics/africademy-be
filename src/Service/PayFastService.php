@@ -168,4 +168,19 @@ class PayFastService
 
         throw new \RuntimeException('Live PayFast adhoc charging requires symfony/http-client and is not enabled in this build.');
     }
+
+    /**
+     * Refunds a settled payment. Simulated in sandbox; a live refund requires
+     * symfony/http-client and is not enabled in this build.
+     *
+     * @return array{status: string}
+     */
+    public function refund(string $pfPaymentId, int $amountCents): array
+    {
+        if ($this->sandbox) {
+            return ['status' => 'success'];
+        }
+
+        throw new \RuntimeException('Live PayFast refunds require symfony/http-client and are not enabled in this build.');
+    }
 }

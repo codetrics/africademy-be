@@ -37,6 +37,7 @@ class OrderService
         private readonly AccessService $accessService,
         private readonly EnrollmentService $enrollmentService,
         private readonly PayFastService $payFastService,
+        private readonly CouponService $couponService,
         private readonly UserLogService $userLogService,
         private readonly EntityManagerInterface $entityManager,
     ) {
@@ -47,7 +48,7 @@ class OrderService
      *
      * @throws OrderException
      */
-    public function createBundlePurchase(User $user, Ulid $bundlePublicId): Order
+    public function createBundlePurchase(User $user, Ulid $bundlePublicId, ?string $couponCode = null): Order
     {
         $bundle = $this->bundleRepository->findOneByPublicId($bundlePublicId);
 
@@ -66,11 +67,32 @@ class OrderService
         $order = new Order();
         $order->setUser($user);
         $order->setBundle($bundle);
-        $order->setAmount(new Money($bundle->getPrice()->getAmountCents(), $bundle->getPrice()->getCurrency()));
+        $this->applyCoupon($order, $user, $bundle->getPrice(), $couponCode);
 
         $this->orderRepository->save($order, true);
 
         return $order;
+    }
+
+    /**
+     * @throws \App\Exceptions\CouponException
+     */
+    private function applyCoupon(Order $order, User $user, Money $price, ?string $couponCode): void
+    {
+        $original = $price->getAmountCents();
+
+        if (is_null($couponCode) || trim($couponCode) === '') {
+            $order->setAmount(new Money($original, $price->getCurrency()));
+
+            return;
+        }
+
+        $coupon = $this->couponService->validate($couponCode, $user, $original);
+        $discount = $this->couponService->computeDiscount($coupon, $original);
+
+        $order->setCoupon($coupon);
+        $order->setDiscountAmountCents($discount);
+        $order->setAmount(new Money($original - $discount, $price->getCurrency()));
     }
 
     private function ownsEntireBundle(User $user, Bundle $bundle): bool
@@ -128,7 +150,7 @@ class OrderService
      *
      * @throws OrderException
      */
-    public function createCoursePurchase(User $user, Ulid $coursePublicId): Order
+    public function createCoursePurchase(User $user, Ulid $coursePublicId, ?string $couponCode = null): Order
     {
         $course = $this->courseRepository->findOneByPublicId($coursePublicId);
 
@@ -152,7 +174,7 @@ class OrderService
         $order = new Order();
         $order->setUser($user);
         $order->setCourse($course);
-        $order->setAmount(new Money($course->getPrice()->getAmountCents(), $course->getPrice()->getCurrency()));
+        $this->applyCoupon($order, $user, $course->getPrice(), $couponCode);
 
         $this->orderRepository->save($order, true);
 
@@ -231,6 +253,10 @@ class OrderService
             foreach ($this->orderCourses($order) as $course) {
                 $this->accessService->grant($order->getUser(), $course, $this->grantSource($order));
                 $this->enrollmentService->ensureEnrolled($order->getUser(), $course);
+            }
+
+            if (!is_null($order->getCoupon())) {
+                $this->couponService->redeem($order->getCoupon(), $order->getUser(), $order->getDiscountAmountCents(), $order);
             }
 
             $this->entityManager->flush();

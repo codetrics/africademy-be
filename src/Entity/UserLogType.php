@@ -40,6 +40,9 @@ class UserLogType
     public const string SUBSCRIPTION_CANCELLED = 'subscription_cancelled';
     public const string SUBSCRIPTION_RENEWED = 'subscription_renewed';
     public const string SUBSCRIPTION_PAYMENT_FAILED = 'subscription_payment_failed';
+    public const string REFUND_APPROVED = 'refund_approved';
+    public const string REFUND_REJECTED = 'refund_rejected';
+    public const string COUPON_REDEEMED = 'coupon_redeemed';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

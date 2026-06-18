@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Entity\UserLogType;
+use App\Exceptions\CouponException;
 use App\Exceptions\JsonExceptionResponse;
 use App\Exceptions\OrderException;
 use App\Service\OrderService;
@@ -46,9 +47,9 @@ final class OrderApiController extends AbstractController
         }
 
         try {
-            $order = $orderService->createCoursePurchase($user, Ulid::fromString($request->attributes->getString('id')));
-        } catch (OrderException $exception) {
-            return $this->mapOrderException($exception);
+            $order = $orderService->createCoursePurchase($user, Ulid::fromString($request->attributes->getString('id')), $this->couponCode($request));
+        } catch (OrderException | CouponException $exception) {
+            return new JsonExceptionResponse($exception->getErrorType(), $exception->getMessage(), $exception->getStatusCode());
         }
 
         $userLogService->log(
@@ -91,9 +92,9 @@ final class OrderApiController extends AbstractController
         }
 
         try {
-            $order = $orderService->createBundlePurchase($user, Ulid::fromString($request->attributes->getString('id')));
-        } catch (OrderException $exception) {
-            return $this->mapOrderException($exception);
+            $order = $orderService->createBundlePurchase($user, Ulid::fromString($request->attributes->getString('id')), $this->couponCode($request));
+        } catch (OrderException | CouponException $exception) {
+            return new JsonExceptionResponse($exception->getErrorType(), $exception->getMessage(), $exception->getStatusCode());
         }
 
         $userLogService->log(
@@ -213,6 +214,15 @@ final class OrderApiController extends AbstractController
         $response->setStatusCode(Response::HTTP_CREATED);
 
         return $response;
+    }
+
+    private function couponCode(Request $request): ?string
+    {
+        $data = json_decode($request->getContent(), true);
+
+        return is_array($data) && array_key_exists('coupon_code', $data) && !is_null($data['coupon_code'])
+            ? (string) $data['coupon_code']
+            : null;
     }
 
     private function narrowStudent(): ?User

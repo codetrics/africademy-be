@@ -6,8 +6,11 @@ namespace App\Repository;
 
 use App\Entity\Order;
 use App\Entity\RefundRequest;
+use App\Enum\RefundStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
+use Symfony\Component\Uid\Ulid;
 
 /**
  * @extends ServiceEntityRepository<RefundRequest>
@@ -46,4 +49,20 @@ class RefundRequestRepository extends ServiceEntityRepository
     {
         return $this->findOneBy(['order' => $order]);
     }
+
+    public function findOneByPublicId(Ulid $publicId): ?RefundRequest
+    {
+        return $this->findOneBy(['publicId' => $publicId]);
+    }
+
+    public function createPendingQueryBuilder(): QueryBuilder
+    {
+        return $this->createQueryBuilder('refund')
+            ->leftJoin('refund.order', 'o')
+            ->addSelect('o')
+            ->where('refund.status = :pending')
+            ->setParameter('pending', RefundStatus::Pending)
+            ->orderBy('refund.createdAt', 'ASC');
+    }
 }
+

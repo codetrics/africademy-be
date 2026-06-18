@@ -569,6 +569,13 @@ paths:
             description: Creates a pending order and returns the signed PayFast checkout fields to POST to PayFast. Course must be published and purchasable.
             parameters:
                 - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                coupon_code: { type: string, nullable: true, description: Optional discount code }
             responses:
                 '201':
                     description: Pending order + PayFast checkout
@@ -779,6 +786,13 @@ paths:
             summary: Purchase a bundle (one-off) — grants all its courses
             parameters:
                 - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                coupon_code: { type: string, nullable: true, description: Optional discount code }
             responses:
                 '201':
                     description: Pending order + PayFast checkout
@@ -796,6 +810,132 @@ paths:
                 '404': { $ref: '#/components/responses/NotFound' }
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/refund-requests:
+        get:
+            tags: [Admin]
+            summary: List pending refund requests (ROLE_ADMIN)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Pending refund requests
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    refund_requests: { type: array, items: { $ref: '#/components/schemas/RefundRequest' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/refund-requests/{id}/approve:
+        post:
+            tags: [Admin]
+            summary: Approve a refund — revokes access, refunds the order (ROLE_ADMIN)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Refund request ULID }
+            responses:
+                '200':
+                    description: Approved refund request
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { refund_request: { $ref: '#/components/schemas/RefundRequest' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/refund-requests/{id}/reject:
+        post:
+            tags: [Admin]
+            summary: Reject a refund request (ROLE_ADMIN)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Refund request ULID }
+            responses:
+                '200':
+                    description: Rejected refund request
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { refund_request: { $ref: '#/components/schemas/RefundRequest' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/coupons:
+        get:
+            tags: [Admin]
+            summary: List coupons (ROLE_ADMIN)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Coupons
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    coupons: { type: array, items: { $ref: '#/components/schemas/Coupon' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+        post:
+            tags: [Admin]
+            summary: Create a coupon (ROLE_ADMIN)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [code, discount_type, discount_value]
+                            properties:
+                                code: { type: string, example: SAVE20 }
+                                discount_type: { type: string, enum: [percent, fixed] }
+                                discount_value: { type: integer, description: 'Percent points (<=100) or cents for fixed' }
+                                max_redemptions: { type: integer, nullable: true }
+                                min_amount_cents: { type: integer, nullable: true }
+                                expires_at: { type: integer, nullable: true, description: Unix timestamp }
+                                is_active: { type: boolean }
+            responses:
+                '201':
+                    description: Created coupon
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { coupon: { $ref: '#/components/schemas/Coupon' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/coupons/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Coupon ULID }
+        patch:
+            tags: [Admin]
+            summary: Update a coupon (ROLE_ADMIN)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                discount_value: { type: integer }
+                                max_redemptions: { type: integer, nullable: true }
+                                min_amount_cents: { type: integer, nullable: true }
+                                expires_at: { type: integer, nullable: true }
+                                is_active: { type: boolean }
+            responses:
+                '200':
+                    description: Updated coupon
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { coupon: { $ref: '#/components/schemas/Coupon' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Admin]
+            summary: Delete a coupon (ROLE_ADMIN)
+            responses:
+                '204': { description: Coupon deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
     /plans:
         get:
             tags: [Subscription]
@@ -886,6 +1026,7 @@ paths:
                             properties:
                                 plan_id: { type: string, description: Plan ULID }
                                 payment_method_id: { type: string, description: Payment method ULID }
+                                coupon_code: { type: string, nullable: true, description: 'Optional; discounts the first charge only' }
             responses:
                 '201':
                     description: Active subscription
@@ -1113,6 +1254,7 @@ components:
                 course: { allOf: [{ $ref: '#/components/schemas/Course' }], nullable: true }
                 bundle: { allOf: [{ $ref: '#/components/schemas/Bundle' }], nullable: true }
                 amount: { $ref: '#/components/schemas/Money' }
+                discount_amount_cents: { type: integer, description: Coupon discount applied }
                 status: { type: string, enum: [pending, paid, cancelled, refunded] }
                 paid_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
                 refunded_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
@@ -1123,9 +1265,24 @@ components:
             properties:
                 id: { type: string, description: ULID public identifier }
                 order_id: { type: string, description: Order ULID }
+                order: { $ref: '#/components/schemas/Order' }
                 reason: { type: string, nullable: true }
                 status: { type: string, enum: [pending, approved, rejected] }
                 resolved_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Coupon:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                code: { type: string, example: SAVE20 }
+                discount_type: { type: string, enum: [percent, fixed] }
+                discount_value: { type: integer, description: 'Percent points or cents' }
+                max_redemptions: { type: integer, nullable: true }
+                redemption_count: { type: integer }
+                min_amount_cents: { type: integer, nullable: true }
+                expires_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                is_active: { type: boolean }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         Bundle:
