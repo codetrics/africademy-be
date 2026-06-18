@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Entity\Bundle;
 use App\Entity\Money;
 use App\Entity\Order;
 use App\Entity\RefundRequest;
 use App\Entity\User;
 use App\Entity\UserLogType;
+use App\Enum\BundleStatus;
 use App\Enum\CourseStatus;
 use App\Enum\EntitlementSource;
 use App\Enum\OrderStatus;
 use App\Exceptions\OrderException;
+use App\Repository\BundleRepository;
 use App\Repository\CourseRepository;
 use App\Repository\OrderRepository;
 use App\Repository\RefundRequestRepository;
@@ -29,6 +32,7 @@ class OrderService
     public function __construct(
         private readonly OrderRepository $orderRepository,
         private readonly CourseRepository $courseRepository,
+        private readonly BundleRepository $bundleRepository,
         private readonly RefundRequestRepository $refundRequestRepository,
         private readonly AccessService $accessService,
         private readonly EnrollmentService $enrollmentService,
@@ -36,6 +40,48 @@ class OrderService
         private readonly UserLogService $userLogService,
         private readonly EntityManagerInterface $entityManager,
     ) {
+    }
+
+    /**
+     * Creates a pending order for a one-off bundle purchase.
+     *
+     * @throws OrderException
+     */
+    public function createBundlePurchase(User $user, Ulid $bundlePublicId): Order
+    {
+        $bundle = $this->bundleRepository->findOneByPublicId($bundlePublicId);
+
+        if (is_null($bundle)) {
+            throw OrderException::bundleNotFound();
+        }
+
+        if ($bundle->getStatus() !== BundleStatus::Published || $bundle->getPrice()->getAmountCents() <= 0 || $bundle->getCourses()->isEmpty()) {
+            throw OrderException::bundleNotPurchasable();
+        }
+
+        if ($this->ownsEntireBundle($user, $bundle)) {
+            throw OrderException::bundleAlreadyOwned();
+        }
+
+        $order = new Order();
+        $order->setUser($user);
+        $order->setBundle($bundle);
+        $order->setAmount(new Money($bundle->getPrice()->getAmountCents(), $bundle->getPrice()->getCurrency()));
+
+        $this->orderRepository->save($order, true);
+
+        return $order;
+    }
+
+    private function ownsEntireBundle(User $user, Bundle $bundle): bool
+    {
+        foreach ($bundle->getCourses() as $course) {
+            if (!$this->accessService->hasAccess($user, $course)) {
+                return false;
+            }
+        }
+
+        return !$bundle->getCourses()->isEmpty();
     }
 
     /**
@@ -182,8 +228,10 @@ class OrderService
             $order->setPfPaymentId($pfPaymentId);
             $this->orderRepository->save($order);
 
-            $this->accessService->grant($order->getUser(), $order->getCourse(), EntitlementSource::CoursePurchase);
-            $this->enrollmentService->ensureEnrolled($order->getUser(), $order->getCourse());
+            foreach ($this->orderCourses($order) as $course) {
+                $this->accessService->grant($order->getUser(), $course, $this->grantSource($order));
+                $this->enrollmentService->ensureEnrolled($order->getUser(), $course);
+            }
 
             $this->entityManager->flush();
             $this->entityManager->commit();
@@ -194,9 +242,26 @@ class OrderService
 
         $this->userLogService->log(
             UserLogType::PAYMENT_COMPLETED,
-            'Course purchase completed',
+            'Purchase completed',
             $order->getUser()->getEmail(),
-            context: ['order' => (string) $order->getPublicId(), 'course' => (string) $order->getCourse()->getPublicId()],
+            context: ['order' => (string) $order->getPublicId()],
         );
+    }
+
+    /**
+     * @return iterable<\App\Entity\Course>
+     */
+    private function orderCourses(Order $order): iterable
+    {
+        if (!is_null($order->getBundle())) {
+            return $order->getBundle()->getCourses();
+        }
+
+        return is_null($order->getCourse()) ? [] : [$order->getCourse()];
+    }
+
+    private function grantSource(Order $order): EntitlementSource
+    {
+        return is_null($order->getBundle()) ? EntitlementSource::CoursePurchase : EntitlementSource::BundlePurchase;
     }
 }

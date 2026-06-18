@@ -60,4 +60,19 @@ class OrderException extends Exception
     {
         return new self(JsonExceptionResponse::ERROR_CONFLICT, Response::HTTP_CONFLICT, 'A refund has already been requested for this order.');
     }
+
+    public static function bundleNotFound(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_NOT_FOUND, Response::HTTP_NOT_FOUND, 'Bundle not found.');
+    }
+
+    public static function bundleNotPurchasable(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'This bundle is not available for purchase.');
+    }
+
+    public static function bundleAlreadyOwned(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_CONFLICT, Response::HTTP_CONFLICT, 'You already have access to all courses in this bundle.');
+    }
 }

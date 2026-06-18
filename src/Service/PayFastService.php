@@ -49,7 +49,7 @@ class PayFastService
             'notify_url' => $this->notifyUrl,
             'm_payment_id' => (string) $order->getPublicId(),
             'amount' => $this->formatAmount($order->getAmount()->getAmountCents()),
-            'item_name' => substr($order->getCourse()->getTitle(), 0, self::ITEM_NAME_MAX_LENGTH),
+            'item_name' => substr($this->orderItemName($order), 0, self::ITEM_NAME_MAX_LENGTH),
         ];
 
         $fields['signature'] = $this->generateSignature($fields);
@@ -93,6 +93,15 @@ class PayFastService
     public function isSandbox(): bool
     {
         return $this->sandbox;
+    }
+
+    private function orderItemName(Order $order): string
+    {
+        if (!is_null($order->getBundle())) {
+            return $order->getBundle()->getTitle();
+        }
+
+        return is_null($order->getCourse()) ? 'Order' : $order->getCourse()->getTitle();
     }
 
     /**

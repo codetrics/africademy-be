@@ -649,6 +649,153 @@ paths:
                 '404': { $ref: '#/components/responses/NotFound' }
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
+    /bundles:
+        get:
+            tags: [Bundles]
+            summary: List bundles (paginated)
+            description: Published bundles; teachers also see their own drafts.
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Bundles
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    bundles: { type: array, items: { $ref: '#/components/schemas/Bundle' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+        post:
+            tags: [Bundles]
+            summary: Create a bundle (draft) — ROLE_TEACHER
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title]
+                            properties:
+                                title: { type: string }
+                                description: { type: string, nullable: true }
+                                price_amount_cents: { type: integer }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /bundles/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+        get:
+            tags: [Bundles]
+            summary: Get a bundle
+            responses:
+                '200':
+                    description: The bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Bundles]
+            summary: Update a bundle (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                title: { type: string }
+                                description: { type: string, nullable: true }
+                                price_amount_cents: { type: integer }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Bundles]
+            summary: Delete a bundle (owner only)
+            responses:
+                '204': { description: Bundle deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /bundles/{id}/courses:
+        put:
+            tags: [Bundles]
+            summary: Set the bundle's courses (owner only)
+            description: Each course must be one of the owner's own published courses.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [course_ids]
+                            properties:
+                                course_ids: { type: array, items: { type: string, description: Course ULID } }
+            responses:
+                '200':
+                    description: Updated bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /bundles/{id}/publish:
+        post:
+            tags: [Bundles]
+            summary: Publish a bundle (owner only)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+            responses:
+                '200':
+                    description: Published bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /bundles/{id}/purchase:
+        post:
+            tags: [Bundles]
+            summary: Purchase a bundle (one-off) — grants all its courses
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+            responses:
+                '201':
+                    description: Pending order + PayFast checkout
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    order: { $ref: '#/components/schemas/Order' }
+                                    payfast:
+                                        type: object
+                                        properties:
+                                            url: { type: string }
+                                            fields: { type: object, additionalProperties: { type: string } }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /plans:
         get:
             tags: [Subscription]
@@ -960,9 +1107,11 @@ components:
                       state: { type: string, enum: [done, current, upcoming] }
         Order:
             type: object
+            description: Exactly one of course or bundle is set.
             properties:
                 id: { type: string, description: ULID public identifier }
-                course: { $ref: '#/components/schemas/Course' }
+                course: { allOf: [{ $ref: '#/components/schemas/Course' }], nullable: true }
+                bundle: { allOf: [{ $ref: '#/components/schemas/Bundle' }], nullable: true }
                 amount: { $ref: '#/components/schemas/Money' }
                 status: { type: string, enum: [pending, paid, cancelled, refunded] }
                 paid_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
@@ -977,6 +1126,20 @@ components:
                 reason: { type: string, nullable: true }
                 status: { type: string, enum: [pending, approved, rejected] }
                 resolved_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Bundle:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                title: { type: string }
+                slug: { type: string }
+                description: { type: string, nullable: true }
+                price: { $ref: '#/components/schemas/Money' }
+                thumbnail: { type: string, nullable: true }
+                status: { type: string, enum: [draft, published] }
+                instructor: { type: object, properties: { id: { type: string }, name: { type: string } } }
+                courses: { type: array, items: { $ref: '#/components/schemas/Course' } }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         SubscriptionPlan:

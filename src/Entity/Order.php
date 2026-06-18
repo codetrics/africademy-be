@@ -40,9 +40,15 @@ class Order
 
     #[Expose]
     #[ORM\ManyToOne(targetEntity: Course::class)]
-    #[ORM\JoinColumn(name: 'course_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'course_id', referencedColumnName: 'id', nullable: true)]
     #[Type("App\Entity\Course")]
-    private Course $course;
+    private ?Course $course = null;
+
+    #[Expose]
+    #[ORM\ManyToOne(targetEntity: Bundle::class)]
+    #[ORM\JoinColumn(name: 'bundle_id', referencedColumnName: 'id', nullable: true)]
+    #[Type("App\Entity\Bundle")]
+    private ?Bundle $bundle = null;
 
     #[Expose]
     #[ORM\Embedded(class: Money::class)]
@@ -91,14 +97,25 @@ class Order
         return $this;
     }
 
-    public function getCourse(): Course
+    public function getCourse(): ?Course
     {
         return $this->course;
     }
 
-    public function setCourse(Course $course): static
+    public function setCourse(?Course $course): static
     {
         $this->course = $course;
+        return $this;
+    }
+
+    public function getBundle(): ?Bundle
+    {
+        return $this->bundle;
+    }
+
+    public function setBundle(?Bundle $bundle): static
+    {
+        $this->bundle = $bundle;
         return $this;
     }
 

@@ -71,6 +71,51 @@ final class OrderApiController extends AbstractController
     }
 
     #[Route(
+        '/api/{version}/bundles/{id}/purchase',
+        name: 'api_order_bundle_purchase',
+        requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_POST],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function purchaseBundle(
+        Request $request,
+        OrderService $orderService,
+        PayFastService $payFastService,
+        SerializerService $serializerService,
+        UserLogService $userLogService,
+    ): JsonResponse {
+        $user = $this->narrowStudent();
+        if (!$user instanceof User) {
+            return $this->unauthorized();
+        }
+
+        try {
+            $order = $orderService->createBundlePurchase($user, Ulid::fromString($request->attributes->getString('id')));
+        } catch (OrderException $exception) {
+            return $this->mapOrderException($exception);
+        }
+
+        $userLogService->log(
+            UserLogType::PURCHASE_INITIATED,
+            'Bundle purchase initiated',
+            $user->getEmail(),
+            $request->headers->get('User-Agent'),
+            $request->getClientIp(),
+            ['order' => (string) $order->getPublicId()],
+        );
+
+        $response = new JsonResponse();
+        $response->setData([
+            'order' => json_decode($serializerService->serialize($order)),
+            'payfast' => $payFastService->buildCheckout($order),
+        ]);
+        $response->setStatusCode(Response::HTTP_CREATED);
+
+        return $response;
+    }
+
+    #[Route(
         '/api/{version}/orders',
         name: 'api_order_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
