@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 class LessonVideoUploadService
 {
     private const string VIDEO_DIRECTORY = 'var/storage/lessons';
-    private const int MAX_FILE_SIZE = 512 * 1024 * 1024;
+    private const int MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
 
     /**
      * @var array<string, string> Allowed mime types mapped to their canonical extension.
