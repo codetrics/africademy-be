@@ -1,12 +1,151 @@
 openapi: 3.0.3
 info:
     title: Africademy API
-    description: Africademy backend API.
     version: 1.0.0
+    contact:
+        name: Africademy / CodeStudio
+        email: dev@codestudio.co.za
+    license:
+        name: Proprietary
+    description: |
+        Africademy is a multi-course online learning platform. This is the
+        **API-only** backend — every endpoint returns JSON under `/api/v1` and is
+        authenticated per-request with a JWT bearer token (no sessions/cookies).
+
+        ### Authentication & roles
+        1. `POST /auth/register` — create a user + profile (returns **no** token).
+        2. `POST /auth/verify-email/request` then `POST /auth/verify-email` — verify the
+           email with the OTP (some actions require a verified email).
+        3. `POST /auth/login` — returns a JWT **access token** (TTL ~1h) and a
+           **refresh token** (TTL ~30d).
+        4. Send `Authorization: Bearer <access_token>` on every authenticated request.
+        5. `POST /auth/refresh` — exchange the refresh token for a new access token.
+
+        Roles are hierarchical: `ROLE_STUDENT` ⊂ `ROLE_TEACHER` ⊂ `ROLE_ADMIN`.
+        Students consume content; teachers author courses/lessons/blog posts they own
+        (record-level checks via voters); admins manage coupons, refunds, blog
+        categories, analytics, the student directory, and email campaigns.
+
+        ### Public endpoints (no token)
+        - `POST /auth/*` (register, login, refresh, verify-email, password reset)
+        - `GET /blog/posts`, `GET /blog/posts/{slug}`, `GET /blog/categories`,
+          `GET /blog/posts/{id}/cover`
+        - `POST /newsletter/subscribe`, `GET /newsletter/unsubscribe`
+        - `GET /certificates/verify/{credentialId}` — public certificate verification
+        - `GET /open-api/docs` — this documentation
+
+        ### Conventions
+        - **Identifiers:** every resource is addressed by its **ULID** public id; internal
+          auto-increment keys are never exposed.
+        - **Timestamps:** all date/time fields are **Unix seconds** (integer).
+          Convert in TS with `new Date(value * 1000)`.
+        - **Pagination:** list endpoints accept `page` (default 1) and `limit`, and return a
+          `pagination` object (`current_page`, `items_per_page`, `total_items`, `total_pages`).
+        - **Money:** amounts are integer **cents** with an ISO currency (ZAR).
+
+        ### Error envelope
+        Every error returns `{ "error": "<code>", "error_description": "<message>" }`.
+        Common codes by status: `400` invalid_json / invalid_request · `401` unauthorized ·
+        `403` (access denied) · `404` not_found · `409` conflict ·
+        `422` validation_error · `429` rate_limit_exceeded.
+
+        ### Webhooks
+        PayFast posts payment notifications (ITN) to `POST /webhooks/payfast/notify`
+        (server-to-server; signature + amount validated). This is **not** a client endpoint.
+        Charges/refunds simulate in sandbox (`PAYFAST_SANDBOX=true`) and call the live
+        PayFast API otherwise.
+
+        ### Key flows
+        - **Access & purchase:** access is decided by one gate. **Free** courses grant
+          access immediately. **Per-course** / **bundle** purchases return a signed PayFast
+          checkout → ITN marks the order paid → an entitlement is granted and the student
+          auto-enrolled. **Subscription** access covers all included courses while active.
+        - **Learn:** enroll → `GET /courses/{id}/learn` (gated) for lessons + progress →
+          stream lesson video → mark lessons complete → on finishing a certificate-enabled
+          course (passing its quiz where required) a certificate is issued.
+        - **Refund:** student opens a refund request (30-day window) → admin approval revokes
+          the entitlement and triggers the PayFast refund.
+        - **Recurring billing:** a scheduled job renews due subscriptions or expires
+          cancelled ones.
 servers:
     - url: http://be-preview.codetrics.co.za/api/v1
 security:
     - bearerAuth: []
+tags:
+    - name: Auth
+      description: >
+        Registration, login (JWT access + refresh), token refresh, email verification (OTP),
+        and password reset. Public — no token required. Register returns no token; log in afterwards.
+    - name: Profile
+      description: >
+        The authenticated user's profile (separate from auth identity): name, bio, locale,
+        and avatar upload/streaming. The avatar field is an absolute URL to the stream endpoint.
+    - name: Catalog
+      description: Public-facing course discovery — the paginated catalogue with search, category, and level filters.
+    - name: Courses
+      description: >
+        Course CRUD for teachers (own courses, record-level voter checks) and reads for students.
+        Courses carry pricing flags (free / purchasable / included-in-subscription) that feed the access gate.
+    - name: Lessons
+      description: >
+        Lesson authoring within a course (owner only) and reads for students. Lessons may host a
+        video (upload + access-gated range streaming) or reference an external embed via content_ref.
+    - name: Enrollment
+      description: >
+        Enroll the current student in a course and list enrollments. Enrolling requires access
+        (free course, or an entitlement / active subscription); content stays gated until then.
+    - name: Progress
+      description: >
+        The learn view (lessons + computed progress for a course) and marking lessons complete.
+        Completing a certificate-enabled course issues a certificate.
+    - name: Review
+      description: >
+        Course reviews & ratings. A student may review a course they are enrolled in once;
+        posting/updating refreshes the course's cached rating average and count.
+    - name: Certificate
+      description: >
+        Completion certificates (PDF). Issued automatically on completing a certificate-enabled
+        course. Includes a public verification endpoint keyed by a URL-safe credential id.
+    - name: Quiz
+      description: >
+        Course quizzes — questions, choices, and attempts. Where a course requires a quiz, passing
+        it is part of the certificate gate. Correct-answer flags are never exposed to students.
+    - name: Orders
+      description: >
+        One-off purchases (per-course or bundle) via signed PayFast checkout, plus the buyer's order
+        history. Payment is confirmed asynchronously by the PayFast ITN webhook.
+    - name: Subscription
+      description: >
+        Subscription plans, subscribe/cancel, and the payment ledger. Active subscriptions grant
+        access to all included courses; renewals/expiry are handled by the billing scheduler. No refunds.
+    - name: PaymentMethods
+      description: >
+        Saved PayFast card tokens (libsodium-encrypted), multiple per user with a default. Captured via a
+        tokenization checkout routed through the ITN webhook; used for subscription charges.
+    - name: Bundles
+      description: >
+        Teacher-owned course bundles (a set of the owner's published courses) sold one-off. A paid bundle
+        grants entitlements for every course in it and auto-enrolls the buyer.
+    - name: Community
+      description: >
+        Community hub — posts (tag, body, optional image/link), comments, likes, and trending topics.
+        Authors (or admins) edit/delete; all actions require a logged-in student.
+    - name: Blog
+      description: >
+        Marketing blog. Reads are public; authoring (create/update/publish/cover) requires ROLE_TEACHER
+        and is owner/admin-gated. Blog category management is admin-only.
+    - name: Newsletter
+      description: >
+        Public, rate-limited newsletter subscription with a one-click token unsubscribe. A welcome email
+        is queued on subscribe.
+    - name: Analytics
+      description: >
+        Admin dashboard metrics — overview KPIs (users, revenue, MRR, subscriptions, enrollments,
+        reviews), revenue & enrollment time-series, and top courses. ROLE_ADMIN only.
+    - name: Admin
+      description: >
+        Admin operations — coupons, refund approval, blog categories, the student directory, the
+        UserLog activity feed, and segmented email campaigns. ROLE_ADMIN only.
 paths:
     /auth/register:
         post:
@@ -64,6 +203,9 @@ paths:
                                 properties:
                                     token: { type: string, description: JWT access token (TTL 1h) }
                                     refresh_token: { type: string, description: Refresh token (TTL 30d) }
+                            example:
+                                token: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3...
+                                refresh_token: 9c1f0e...d2b7
                 '401': { $ref: '#/components/responses/Unauthorized' }
     /auth/refresh:
         post:
@@ -2232,6 +2374,17 @@ components:
             type: http
             scheme: bearer
             bearerFormat: JWT
+    parameters:
+        PageParam:
+            name: page
+            in: query
+            description: 1-based page number.
+            schema: { type: integer, default: 1, minimum: 1 }
+        LimitParam:
+            name: limit
+            in: query
+            description: Items per page.
+            schema: { type: integer, default: 10, minimum: 1 }
     schemas:
         User:
             type: object
