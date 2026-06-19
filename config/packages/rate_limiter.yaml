@@ -12,3 +12,13 @@ framework:
             policy: 'sliding_window'
             limit: 5
             interval: '15 minutes'
+        # Baseline cap for all anonymous (unauthenticated) /api traffic, per IP.
+        public_api:
+            policy: 'sliding_window'
+            limit: 60
+            interval: '1 minute'
+        # Per-user cap on community write actions (posts/comments/likes/uploads).
+        community_write:
+            policy: 'sliding_window'
+            limit: 20
+            interval: '1 minute'

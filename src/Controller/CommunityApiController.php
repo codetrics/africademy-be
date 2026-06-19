@@ -23,6 +23,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -92,10 +93,16 @@ final class CommunityApiController extends AbstractController
         Request $request,
         CommunityService $communityService,
         SerializerService $serializerService,
+        RateLimiterFactoryInterface $communityWriteLimiter,
     ): JsonResponse {
         $user = $this->narrowUser();
         if (!$user instanceof User) {
             return $this->unauthorized();
+        }
+
+        $limited = $this->enforceWriteLimit($communityWriteLimiter);
+        if ($limited instanceof JsonResponse) {
+            return $limited;
         }
 
         $data = $this->decode($request);
@@ -277,7 +284,13 @@ final class CommunityApiController extends AbstractController
         Request $request,
         CommunityService $communityService,
         SerializerService $serializerService,
+        RateLimiterFactoryInterface $communityWriteLimiter,
     ): JsonResponse {
+        $limited = $this->enforceWriteLimit($communityWriteLimiter);
+        if ($limited instanceof JsonResponse) {
+            return $limited;
+        }
+
         try {
             $post = $communityService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
         } catch (CommunityException $exception) {
@@ -347,10 +360,16 @@ final class CommunityApiController extends AbstractController
     public function toggleLike(
         Request $request,
         CommunityService $communityService,
+        RateLimiterFactoryInterface $communityWriteLimiter,
     ): JsonResponse {
         $user = $this->narrowUser();
         if (!$user instanceof User) {
             return $this->unauthorized();
+        }
+
+        $limited = $this->enforceWriteLimit($communityWriteLimiter);
+        if ($limited instanceof JsonResponse) {
+            return $limited;
         }
 
         try {
@@ -412,10 +431,16 @@ final class CommunityApiController extends AbstractController
         Request $request,
         CommunityService $communityService,
         SerializerService $serializerService,
+        RateLimiterFactoryInterface $communityWriteLimiter,
     ): JsonResponse {
         $user = $this->narrowUser();
         if (!$user instanceof User) {
             return $this->unauthorized();
+        }
+
+        $limited = $this->enforceWriteLimit($communityWriteLimiter);
+        if ($limited instanceof JsonResponse) {
+            return $limited;
         }
 
         try {
@@ -510,6 +535,22 @@ final class CommunityApiController extends AbstractController
         $response->setData(['post' => json_decode($serializerService->serialize($post))]);
 
         return $response;
+    }
+
+    private function enforceWriteLimit(RateLimiterFactoryInterface $communityWriteLimiter): ?JsonExceptionResponse
+    {
+        $user = $this->getUser();
+        $key = $user instanceof User ? (string) $user->getUserIdentifier() : 'anonymous';
+
+        if (!$communityWriteLimiter->create($key)->consume()->isAccepted()) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_RATE_LIMIT_EXCEEDED,
+                'Too many requests. Please slow down.',
+                Response::HTTP_TOO_MANY_REQUESTS,
+            );
+        }
+
+        return null;
     }
 
     private function mapException(CommunityException $exception): JsonExceptionResponse
