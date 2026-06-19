@@ -106,6 +106,9 @@ entry) or expires cancelled ones.
 ## API & documentation
 
 - **Swagger UI:** `GET /open-api/docs` (raw spec at `/open-api/docs.json`).
+  Protected by **HTTP Basic** against a dedicated docs user (separate from API
+  users). Provision the single login with `bin/console app:docs-user:create <username>`
+  (prompts for the password; fails if one already exists).
 - **Source of truth:** `config/openapi.yaml`.
 - **Health check:** `GET /health` → `{"status":"ok"}`.
 
