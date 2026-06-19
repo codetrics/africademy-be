@@ -10,10 +10,14 @@ ARG NODE_VERSION=lts/krypton
 
 RUN test -n "$APP_USER" || (echo "APP_USER build arg is required" && exit 1)
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Image (OS) timezone — keeps the system clock, Apache logs and PHP all on SAST.
+ENV TZ=Africa/Johannesburg
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
         git \
         unzip \
         curl \
+        tzdata \
         libicu-dev \
         libzip-dev \
         libxml2-dev \
@@ -24,6 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libapache2-mod-xsendfile \
         chromium \
         fonts-liberation \
+    && ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime \
+    && echo "${TZ}" > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install -j"$(nproc)" \

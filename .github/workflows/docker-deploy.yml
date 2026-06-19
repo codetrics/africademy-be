@@ -68,6 +68,20 @@ jobs:
             "umask 077 && cat > '${{ env.DEPLOY_PATH }}/.env.local' && chmod 600 '${{ env.DEPLOY_PATH }}/.env.local'" <<'EOF'
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
+          APP_BASE_URL=${{ vars.APP_BASE_URL }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          MAILER_DSN=${{ secrets.MAILER_DSN }}
+          JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem
+          JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem
+          JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}
+          APP_SODIUM_AEAD_KEY=${{ secrets.APP_SODIUM_AEAD_KEY }}
+          PAYFAST_SANDBOX=${{ vars.PAYFAST_SANDBOX }}
+          PAYFAST_MERCHANT_ID=${{ secrets.PAYFAST_MERCHANT_ID }}
+          PAYFAST_MERCHANT_KEY=${{ secrets.PAYFAST_MERCHANT_KEY }}
+          PAYFAST_PASSPHRASE=${{ secrets.PAYFAST_PASSPHRASE }}
+          PAYFAST_RETURN_URL=${{ vars.PAYFAST_RETURN_URL }}
+          PAYFAST_CANCEL_URL=${{ vars.PAYFAST_CANCEL_URL }}
+          PAYFAST_NOTIFY_URL=${{ vars.PAYFAST_NOTIFY_URL }}
           EOF
 
       - name: Build and start testing_backend
@@ -75,6 +89,12 @@ jobs:
           ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
             ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
             "cd '${{ env.COMPOSE_PATH }}' && sudo APP_USER='${{ secrets.C3_SSH_USER }}' docker compose up -d --build testing_backend"
+
+      - name: Generate JWT keypair (if missing)
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "sudo docker compose -f '${{ env.COMPOSE_PATH }}/docker-compose.yml' exec -T --user '${{ secrets.C3_SSH_USER }}' testing_backend php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction"
 
       - name: Clear Symfony Cache
         run: |
