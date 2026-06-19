@@ -50,15 +50,24 @@ security:
             login_throttling:
                 max_attempts: 5
                 interval: '15 minutes'
+        main:
+            # Catch-all: every remaining route runs through the security layer so
+            # nothing is served outside a firewall (deny-by-default below).
+            lazy: true
+            stateless: true
+            provider: app_user_provider
 
     # Note: Only the *first* matching rule is applied
     access_control:
         - { path: ^/open-api, roles: ROLE_DOCS }
+        - { path: ^/health$, roles: PUBLIC_ACCESS }
+        - { path: ^/webhooks/, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/auth, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/certificates/verify, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/blog, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/newsletter, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: ROLE_STUDENT }
+        - { path: ^/, roles: ROLE_ADMIN }
 
 when@test:
     security:
