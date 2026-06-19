@@ -77,6 +77,16 @@ class Lesson
     #[Assert\Length(max: 255)]
     private ?string $contentRef = null;
 
+    /**
+     * Relative path to the platform-hosted video under var/storage/lessons/.
+     * Never exposed directly — the absolute video URL is added by
+     * LessonVideoSerializationSubscriber. Distinct from contentRef, which
+     * holds an external embed reference (e.g. a YouTube/Vimeo URL).
+     */
+    #[Exclude]
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $videoPath = null;
+
     public function __construct()
     {
         $this->initialisePublicId();
@@ -198,6 +208,17 @@ class Lesson
     public function setContentRef(?string $contentRef): static
     {
         $this->contentRef = $contentRef;
+        return $this;
+    }
+
+    public function getVideoPath(): ?string
+    {
+        return $this->videoPath;
+    }
+
+    public function setVideoPath(?string $videoPath): static
+    {
+        $this->videoPath = $videoPath;
         return $this;
     }
 }

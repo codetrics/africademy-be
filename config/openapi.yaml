@@ -501,6 +501,55 @@ paths:
                 '204': { description: Lesson deleted }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{courseId}/lessons/{id}/video:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+            - { name: id, in: path, required: true, schema: { type: string }, description: Lesson ULID }
+        get:
+            tags: [Lessons]
+            summary: Stream a lesson's hosted video
+            description: >-
+                Access-gated: the course owner, or a student with a valid entitlement to a published lesson
+                (same gate as the learn view). Returns the video with HTTP Range support (206 partial content)
+                for seeking; served via X-Sendfile when available.
+            responses:
+                '200': { description: The video binary (supports Range), content: { 'video/*': { schema: { type: string, format: binary } } } }
+                '206': { description: Partial content (Range request) }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Lessons]
+            summary: Upload a lesson video (owner only)
+            description: Accepts MP4, WebM or QuickTime. Replaces any existing video. Stored as platform-hosted media (distinct from content_ref embeds).
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [video]
+                            properties:
+                                video: { type: string, format: binary }
+            responses:
+                '200':
+                    description: Lesson with stored video
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Lessons]
+            summary: Remove a lesson's hosted video (owner only)
+            responses:
+                '204': { description: Video removed }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
     /courses/{id}/enroll:
         post:
             tags: [Enrollment]
@@ -2270,7 +2319,8 @@ components:
                 status: { type: string, enum: [draft, published] }
                 position: { type: integer }
                 duration_minutes: { type: integer, nullable: true }
-                content_ref: { type: string, nullable: true }
+                content_ref: { type: string, nullable: true, description: External embed reference (e.g. a YouTube/Vimeo URL) }
+                video_url: { type: string, nullable: true, description: 'Absolute URL to the hosted-video stream endpoint, or null' }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         Pagination:

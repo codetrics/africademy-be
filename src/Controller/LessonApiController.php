@@ -13,11 +13,15 @@ use App\Exceptions\JsonExceptionResponse;
 use App\Repository\CourseRepository;
 use App\Repository\LessonRepository;
 use App\Security\Voter\CourseVoter;
+use App\Service\AccessService;
 use App\Service\Helper\Tools;
 use App\Service\LessonService;
+use App\Service\LessonVideoUploadService;
 use App\Service\SerializerService;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -282,6 +286,157 @@ final class LessonApiController extends AbstractController
         $lessonService->delete($lesson);
 
         return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+    }
+
+    #[Route(
+        '/api/{version}/courses/{courseId}/lessons/{id}/video',
+        name: 'api_lesson_video_post',
+        requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_POST],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function uploadVideo(
+        Request $request,
+        CourseRepository $courseRepository,
+        LessonRepository $lessonRepository,
+        LessonVideoUploadService $lessonVideoUploadService,
+        LessonService $lessonService,
+        SerializerService $serializerService,
+    ): JsonResponse {
+        $course = $courseRepository->findOneByPublicId(Ulid::fromString($request->attributes->getString('courseId')));
+        if (!$course instanceof Course) {
+            return $this->courseNotFound();
+        }
+
+        $this->denyAccessUnlessGranted(CourseVoter::EDIT, $course);
+
+        $lesson = $lessonRepository->findOneByPublicIdAndCourse(
+            Ulid::fromString($request->attributes->getString('id')),
+            $course,
+        );
+        if (!$lesson instanceof Lesson) {
+            return $this->lessonNotFound();
+        }
+
+        $file = $request->files->get('video');
+        if (!$file instanceof UploadedFile) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_REQUEST, 'No video file was uploaded.', Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $storedPath = $lessonVideoUploadService->store($file, $lesson->getVideoPath());
+        } catch (Exception $exception) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, $exception->getMessage(), Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $lesson->setVideoPath($storedPath);
+        $lessonService->update($lesson);
+
+        $response = new JsonResponse();
+        $response->setData(['lesson' => json_decode($serializerService->serialize($lesson))]);
+
+        return $response;
+    }
+
+    #[Route(
+        '/api/{version}/courses/{courseId}/lessons/{id}/video',
+        name: 'api_lesson_video_delete',
+        requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_DELETE],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function deleteVideo(
+        Request $request,
+        CourseRepository $courseRepository,
+        LessonRepository $lessonRepository,
+        LessonVideoUploadService $lessonVideoUploadService,
+        LessonService $lessonService,
+    ): JsonResponse {
+        $course = $courseRepository->findOneByPublicId(Ulid::fromString($request->attributes->getString('courseId')));
+        if (!$course instanceof Course) {
+            return $this->courseNotFound();
+        }
+
+        $this->denyAccessUnlessGranted(CourseVoter::EDIT, $course);
+
+        $lesson = $lessonRepository->findOneByPublicIdAndCourse(
+            Ulid::fromString($request->attributes->getString('id')),
+            $course,
+        );
+        if (!$lesson instanceof Lesson) {
+            return $this->lessonNotFound();
+        }
+
+        $videoPath = $lesson->getVideoPath();
+        if (is_null($videoPath)) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'No video to delete.', Response::HTTP_NOT_FOUND);
+        }
+
+        $lessonVideoUploadService->delete($videoPath);
+        $lesson->setVideoPath(null);
+        $lessonService->update($lesson);
+
+        return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+    }
+
+    #[Route(
+        '/api/{version}/courses/{courseId}/lessons/{id}/video',
+        name: 'api_lesson_video_get',
+        requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
+        defaults: ['_format' => 'json', 'version' => 'v1'],
+        methods: [Request::METHOD_GET],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function getVideo(
+        Request $request,
+        CourseRepository $courseRepository,
+        LessonRepository $lessonRepository,
+        LessonVideoUploadService $lessonVideoUploadService,
+        AccessService $accessService,
+    ): Response {
+        $user = $this->narrowUser();
+        if (!$user instanceof User) {
+            return $this->unauthorized();
+        }
+
+        $course = $courseRepository->findOneByPublicId(Ulid::fromString($request->attributes->getString('courseId')));
+        if (!$course instanceof Course) {
+            return $this->courseNotFound();
+        }
+
+        $lesson = $lessonRepository->findOneByPublicIdAndCourse(
+            Ulid::fromString($request->attributes->getString('id')),
+            $course,
+        );
+        if (!$lesson instanceof Lesson) {
+            return $this->lessonNotFound();
+        }
+
+        // Owners stream their own content freely; everyone else needs a published
+        // lesson and a valid entitlement to the course (same gate as learning).
+        $isOwner = $course->getOwner()->getId() === $user->getId();
+        if (!$isOwner && ($lesson->getStatus() !== LessonStatus::Published || !$accessService->hasAccess($user, $course))) {
+            throw $this->createAccessDeniedException('You do not have access to this lesson video.');
+        }
+
+        $videoPath = $lesson->getVideoPath();
+        if (is_null($videoPath)) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'No video set for this lesson.', Response::HTTP_NOT_FOUND);
+        }
+
+        try {
+            $absolutePath = $lessonVideoUploadService->getAbsolutePath($videoPath);
+        } catch (Exception $exception) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, $exception->getMessage(), Response::HTTP_NOT_FOUND);
+        }
+
+        // Lets Apache (mod_xsendfile) stream the bytes when available; otherwise
+        // Symfony streams it directly. Both honour HTTP Range requests.
+        BinaryFileResponse::trustXSendfileTypeHeader();
+
+        return new BinaryFileResponse($absolutePath);
     }
 
     private function narrowUser(): ?User
