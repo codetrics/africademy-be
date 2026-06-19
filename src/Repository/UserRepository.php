@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Entity\User;
+use App\Enum\UserStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -53,6 +55,30 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function findOneByPublicId(Ulid $publicId): ?User
     {
         return $this->findOneBy(['publicId' => $publicId]);
+    }
+
+    /**
+     * Admin student directory, newest first, with an optional free-text search
+     * across email and profile name, and an optional account-status filter.
+     */
+    public function createAdminQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
+    {
+        $queryBuilder = $this->createQueryBuilder('appUser')
+            ->innerJoin('appUser.profile', 'profile')
+            ->addSelect('profile')
+            ->orderBy('appUser.createdAt', 'DESC');
+
+        if (!is_null($search) && $search !== '') {
+            $queryBuilder->andWhere('appUser.email LIKE :search OR profile.firstName LIKE :search OR profile.lastName LIKE :search')
+                ->setParameter('search', '%' . $search . '%');
+        }
+
+        if (!is_null($status)) {
+            $queryBuilder->andWhere('appUser.status = :status')
+                ->setParameter('status', $status);
+        }
+
+        return $queryBuilder;
     }
 
     /**

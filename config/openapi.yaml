@@ -2010,6 +2010,90 @@ paths:
                                         type: array
                                         items: { $ref: '#/components/schemas/Course' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/students:
+        get:
+            tags: [Admin]
+            summary: Student directory (admin, paginated)
+            description: Search the user base by email or profile name and filter by account status.
+            parameters:
+                - { name: q, in: query, schema: { type: string }, description: Search email / first / last name }
+                - { name: status, in: query, schema: { type: string, enum: [active, suspended] } }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: Matching students
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    students:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/User' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/students/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: User ULID }
+        get:
+            tags: [Admin]
+            summary: Student detail with summary and recent activity (admin)
+            responses:
+                '200':
+                    description: Student detail
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    student: { $ref: '#/components/schemas/User' }
+                                    summary:
+                                        type: object
+                                        properties:
+                                            enrollments:
+                                                type: object
+                                                properties:
+                                                    total: { type: integer }
+                                                    completed: { type: integer }
+                                            orders:
+                                                type: object
+                                                properties:
+                                                    total: { type: integer }
+                                                    total_spent_cents: { type: integer }
+                                                    currency: { type: string, example: ZAR }
+                                            subscription_status: { type: string, nullable: true, enum: [active, past_due, cancelled, expired, null] }
+                                    recent_activity:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/UserLog' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/activity:
+        get:
+            tags: [Admin]
+            summary: Activity feed from UserLog (admin, paginated)
+            description: Audit/activity events, newest first, filterable by log type, free-text and a date window.
+            parameters:
+                - { name: type, in: query, schema: { type: string }, description: 'Log type slug (e.g. login, payment_completed)' }
+                - { name: q, in: query, schema: { type: string }, description: Search username / message }
+                - { name: from, in: query, schema: { type: string, format: date } }
+                - { name: to, in: query, schema: { type: string, format: date } }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 25 } }
+            responses:
+                '200':
+                    description: Activity events
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    activity:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/UserLog' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
 components:
     securitySchemes:
         bearerAuth:
@@ -2162,6 +2246,18 @@ components:
                 id: { type: string, description: ULID public identifier }
                 author: { type: string, description: Display name of the author }
                 body: { type: string }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        UserLog:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                type: { type: string, description: Log type slug }
+                username: { type: string, nullable: true }
+                message: { type: string }
+                ip_address: { type: string, nullable: true }
+                user_agent: { type: string, nullable: true }
+                context: { type: object, nullable: true, additionalProperties: true }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         BlogCategory:
