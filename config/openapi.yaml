@@ -1884,6 +1884,132 @@ paths:
                 '200': { description: Unsubscribed }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /admin/analytics/overview:
+        get:
+            tags: [Analytics]
+            summary: Dashboard overview KPIs (admin)
+            description: Headline metrics across users, revenue, subscriptions, enrollments, courses and reviews. Money in cents (ZAR).
+            responses:
+                '200':
+                    description: Overview metrics
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    users:
+                                        type: object
+                                        properties:
+                                            total: { type: integer }
+                                            new_last_30_days: { type: integer }
+                                            verified: { type: integer }
+                                    revenue:
+                                        type: object
+                                        properties:
+                                            currency: { type: string, example: ZAR }
+                                            total_cents: { type: integer }
+                                            last_30_days_cents: { type: integer }
+                                            refunded_cents: { type: integer }
+                                            mrr_cents: { type: integer, description: Monthly recurring revenue (annual plans normalised /12) }
+                                    subscriptions:
+                                        type: object
+                                        additionalProperties: { type: integer }
+                                        description: Active/past_due/cancelled/expired counts keyed by status
+                                    enrollments:
+                                        type: object
+                                        properties:
+                                            total: { type: integer }
+                                            completed: { type: integer }
+                                    courses:
+                                        type: object
+                                        properties:
+                                            published: { type: integer }
+                                    reviews:
+                                        type: object
+                                        properties:
+                                            average_rating: { type: number, format: float }
+                                    refund_requests:
+                                        type: object
+                                        properties:
+                                            pending: { type: integer }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/analytics/revenue:
+        get:
+            tags: [Analytics]
+            summary: Revenue time-series (admin)
+            description: Paid orders + paid subscription payments bucketed by day or month. Defaults to the last 30 days.
+            parameters:
+                - { name: from, in: query, schema: { type: string, format: date }, description: 'Start date (YYYY-MM-DD)' }
+                - { name: to, in: query, schema: { type: string, format: date }, description: 'End date (YYYY-MM-DD)' }
+                - { name: interval, in: query, schema: { type: string, enum: [day, month], default: day } }
+            responses:
+                '200':
+                    description: Revenue series
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    interval: { type: string, enum: [day, month] }
+                                    from: { type: string, format: date }
+                                    to: { type: string, format: date }
+                                    series:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                bucket: { type: string }
+                                                amount_cents: { type: integer }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/analytics/enrollments:
+        get:
+            tags: [Analytics]
+            summary: Enrollment time-series (admin)
+            description: New enrollments bucketed by day or month. Defaults to the last 30 days.
+            parameters:
+                - { name: from, in: query, schema: { type: string, format: date } }
+                - { name: to, in: query, schema: { type: string, format: date } }
+                - { name: interval, in: query, schema: { type: string, enum: [day, month], default: day } }
+            responses:
+                '200':
+                    description: Enrollment series
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    interval: { type: string, enum: [day, month] }
+                                    from: { type: string, format: date }
+                                    to: { type: string, format: date }
+                                    series:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                bucket: { type: string }
+                                                count: { type: integer }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/analytics/top-courses:
+        get:
+            tags: [Analytics]
+            summary: Top published courses (admin)
+            description: Ranked by enrollment count or rating.
+            parameters:
+                - { name: by, in: query, schema: { type: string, enum: [enrollment, rating], default: enrollment } }
+                - { name: limit, in: query, schema: { type: integer, default: 5, maximum: 20 } }
+            responses:
+                '200':
+                    description: Ranked courses
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    by: { type: string, enum: [enrollment, rating] }
+                                    courses:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
 components:
     securitySchemes:
         bearerAuth:
