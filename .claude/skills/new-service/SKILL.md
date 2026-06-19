@@ -41,7 +41,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Entity\Contact;
+use App\Entity\User;
 use App\Repository\ExampleRepository;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
@@ -58,25 +58,25 @@ class {ServiceName}Service
     /**
      * @return Example[]
      */
-    public function findAllByContact(Contact $contact): array
+    public function findAllByUser(User $user): array
     {
         return $this->exampleRepository->createQueryBuilder('e')
-            ->where('e.contact = :contact')
-            ->setParameter('contact', $contact)
+            ->where('e.user = :user')
+            ->setParameter('user', $user)
             ->getQuery()
             ->getResult();
     }
 
-    public function findByContactQuery(Contact $contact): Query
+    public function findByUserQuery(User $user): Query
     {
         return $this->exampleRepository->createQueryBuilder('e')
-            ->where('e.contact = :contact')
-            ->setParameter('contact', $contact)
+            ->where('e.user = :user')
+            ->setParameter('user', $user)
             ->orderBy('e.createdAt', 'DESC')
             ->getQuery();
     }
 
-    public function create(string $name, Contact $contact): Example
+    public function create(string $name, User $user): Example
     {
         $example = new Example();
         $example->setName($name);

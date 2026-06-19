@@ -24,7 +24,7 @@ cat src/Command/AbstractCommand.php
 
 1. **Check for duplicates** — if `src/Command/$ARGUMENTS.php` already exists, stop.
 2. **Read `AbstractCommand.php`** (shown above) before writing — understand what `getLogger()`, `finalize()`, and `getLockName()` provide.
-3. **Class name convention:** verb-noun style, e.g. `RunPaymentsCommand`, `GenerateInvoicesCommand`, `SyncDomainsCommand`.
+3. **Class name convention:** verb-noun style, e.g. `ProcessQueueCommand`, `SendDigestCommand`, `PruneTokensCommand`.
 4. **File location:** `src/Command/$ARGUMENTS.php`
 
 ## Checklist

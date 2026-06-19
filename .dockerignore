@@ -8,6 +8,7 @@ var/cache
 var/log
 vendor
 node_modules
+public/build
 tests
 .env.local
 .env.local.php

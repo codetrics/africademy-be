@@ -57,7 +57,8 @@ Read the entity shown above, then work through each section of the checklist bel
 - [ ] No deprecated array-style constraint options: `#[Assert\NotBlank(['message' => '...'])]`
 
 ### PHP 8+ standards
-- [ ] Typed constants: `public const int STATUS_ACTIVE = 1;` — no untyped `public const STATUS_ACTIVE = 1;`
+- [ ] Enumerations use native backed enums (`enum CourseStatus: string`), mapped with `#[ORM\Column(enumType: CourseStatus::class)]` — not constant lists
+- [ ] Any typed constants (for non-enumerable fixed scalars) are typed, not untyped: `public const int ACTIVE_ID = 1;` — never `public const ACTIVE_ID = 1;`
 - [ ] Setters return `static` for fluent chaining
 - [ ] Every method has a declared return type
 

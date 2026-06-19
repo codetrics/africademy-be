@@ -1,6 +1,6 @@
 ---
 name: new-entity
-description: Scaffold a new Doctrine ORM entity for this Symfony project. Use when the user asks to create a new entity, model, or database table class. Follows project conventions — JMS serializer, PHP 8 attributes, no constructor property promotion, typed constants.
+description: Scaffold a new Doctrine ORM entity for this Symfony project. Use when the user asks to create a new entity, model, or database table class. Follows project conventions — JMS serializer, PHP 8 attributes, no constructor property promotion, native backed enums, ULID public identifier.
 disable-model-invocation: false
 argument-hint: [ClassName]
 allowed-tools: Read Write Glob Grep Bash(ls *)
@@ -32,7 +32,8 @@ ls src/Entity/
 - [ ] Every exposed API field has `#[Expose]`
 - [ ] `#[SerializedName('snake_case')]` to control the serialized key name
 - [ ] DateTime fields use `#[Type("DateTime<'U'>")]` for Unix timestamp serialization
-- [ ] Typed constants for status/enum values: `public const int STATUS_ACTIVE = 1;`
+- [ ] ULID **public identifier** exposed instead of the integer PK — `#[ORM\Column(type: 'ulid')]` + `#[Expose]`; the auto-increment `$id` stays internal (no `#[Expose]`)
+- [ ] Native **backed enum** for status/type values (`enum CourseStatus: string`), mapped with `#[ORM\Column(enumType: CourseStatus::class)]` — typed constants only for non-enumerable scalars
 - [ ] Setters return `static` for fluent chaining
 - [ ] Validation attributes use **named parameters**: `#[Assert\NotBlank(message: '...')]` — never deprecated array-style
 - [ ] **Relation fields with a slug** — check `src/Service/Serialization/` for an existing handler before documenting the field as an object. If a `SubscribingHandlerInterface` handler exists for the related entity, it serializes as a plain string (its slug or name), not as an object. If no handler exists and one is needed, create it (see Serialization Handler section below).
@@ -54,6 +55,7 @@ use JMS\Serializer\Annotation\ExclusionPolicy;
 use JMS\Serializer\Annotation\Expose;
 use JMS\Serializer\Annotation\SerializedName;
 use JMS\Serializer\Annotation\Type;
+use Symfony\Component\Uid\Ulid;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ExclusionPolicy(policy: 'all')]
@@ -63,8 +65,13 @@ class {ClassName}
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Expose]
     private int $id;
+
+    #[Expose]
+    #[SerializedName('id')]
+    #[ORM\Column(type: 'ulid', unique: true)]
+    #[Type("string")]
+    private Ulid $publicId;
 
     #[Expose]
     #[SerializedName('name')]
@@ -78,9 +85,19 @@ class {ClassName}
     #[Type("DateTime<'U'>")]
     private DateTime $createdAt;
 
+    public function __construct()
+    {
+        $this->publicId = new Ulid();
+    }
+
     public function getId(): int
     {
         return $this->id;
+    }
+
+    public function getPublicId(): Ulid
+    {
+        return $this->publicId;
     }
 
     public function getName(): string
@@ -113,21 +130,11 @@ Replace `{ClassName}` with `$ARGUMENTS` throughout. Add, remove, or modify prope
 
 ## Serialization Handler (`SubscribingHandlerInterface`)
 
-When a relation entity (e.g. `Status`, `ProductType`) should serialize as a **plain string** (its slug or name) rather than a full object, create a custom JMS handler in `src/Service/Serialization/`.
+When a relation entity should serialize as a **plain string** (its slug or name) rather than a full object, create a custom JMS handler in `src/Service/Serialization/`.
 
 **When to create one:** the related entity has a meaningful slug or name field and exposing the full object would be noisy — consumers just need the scalar value.
 
-**Check first:** look in `src/Service/Serialization/` for an existing handler for that entity type before creating a new one.
-
-### Existing handlers
-
-| Handler | Entity | Serializes as |
-|---|---|---|
-| `StatusSerializeSubscriberHandler` | `Status` | `$status->getSlug()` |
-| `ProductTypeSerializeSubscriberHandler` | `ProductType` | `$productType->getName()` |
-| `TransactionTypeSerializeSubscriberHandler` | `TransactionType` | slug/name |
-| `CmsAttributeTypeSerializeSubscriberHandler` | `CmsAttributeType` | slug/name |
-| `ProductFeatureSerializeSubscriberHandler` | `ProductFeature` | slug/name |
+**Check first:** look in `src/Service/Serialization/` for an existing handler for that entity type before creating a new one. Register each handler one-per-file, named `{RelatedEntity}SerializeSubscriberHandler`.
 
 ### Template
 
@@ -174,8 +181,8 @@ class {RelatedEntity}SerializeSubscriberHandler implements SubscribingHandlerInt
 A relation field whose entity has a handler must be documented as `type: string` in the swagger schema, **not** as `$ref` or an inline object. Add a `description` noting which handler controls the output, e.g.:
 
 ```yaml
-status:
+{relation}:
   type: string
-  description: Status slug — serialized via StatusSerializeSubscriberHandler
-  example: pending
+  description: {Relation} slug — serialized via {RelatedEntity}SerializeSubscriberHandler
+  example: example-slug
 ```

@@ -1,0 +1,2829 @@
+openapi: 3.0.3
+info:
+    title: Africademy API
+    version: 1.0.0
+    contact:
+        name: Africademy / CodeStudio
+        email: dev@codestudio.co.za
+    license:
+        name: Proprietary
+    description: |
+        Africademy is a multi-course online learning platform. This is the
+        **API-only** backend — every endpoint returns JSON under `/api/v1` and is
+        authenticated per-request with a JWT bearer token (no sessions/cookies).
+
+        ### Authentication & roles
+        1. `POST /auth/register` — create a user + profile (returns **no** token).
+        2. `POST /auth/verify-email/request` then `POST /auth/verify-email` — verify the
+           email with the OTP (some actions require a verified email).
+        3. `POST /auth/login` — returns a JWT **access token** (TTL ~1h) and a
+           **refresh token** (TTL ~30d).
+        4. Send `Authorization: Bearer <access_token>` on every authenticated request.
+        5. `POST /auth/refresh` — exchange the refresh token for a new access token.
+
+        The issued JWT payload carries the user's ULID as the `id` claim. Token failures
+        return a specific `401`: **expired** ("Token expired."), **invalid** ("Invalid
+        token."), or **missing** ("Authentication required."). A logged-in user without the
+        required role/ownership gets `403`.
+
+        Roles are hierarchical: `ROLE_STUDENT` ⊂ `ROLE_TEACHER` ⊂ `ROLE_ADMIN`.
+        Students consume content; teachers author courses/lessons/blog posts they own
+        (record-level checks via voters); admins manage coupons, refunds, blog
+        categories, analytics, the student directory, and email campaigns.
+
+        ### Public endpoints (no token)
+        - `POST /auth/*` (register, login, refresh, verify-email, password reset)
+        - `GET /blog/posts`, `GET /blog/posts/{slug}`, `GET /blog/categories`,
+          `GET /blog/posts/{id}/cover`
+        - `POST /newsletter/subscribe`, `GET /newsletter/unsubscribe`
+        - `GET /certificates/verify/{credentialId}` — public certificate verification
+        - `GET /open-api/docs` — this documentation
+
+        ### Conventions
+        - **Identifiers:** every resource is addressed by its **ULID** public id; internal
+          auto-increment keys are never exposed.
+        - **Timestamps:** all date/time fields are **Unix seconds** (integer).
+          Convert in TS with `new Date(value * 1000)`.
+        - **Pagination:** list endpoints accept `page` (default 1) and `limit` (capped at 100),
+          and return a `pagination` object (`current_page`, `items_per_page`, `total_items`, `total_pages`).
+        - **Money:** amounts are integer **cents** with an ISO currency (ZAR).
+        - **Rate limiting:** all anonymous (unauthenticated) requests are capped at **60/minute per IP**;
+          sensitive flows are stricter (registration / email-verification / password-reset / newsletter:
+          **5 per 15 minutes**, login: **5 per 15 minutes**). Community writes (post/comment/like/upload)
+          are capped at **20/minute per user**. Exceeding a limit returns `429 rate_limit_exceeded`.
+
+        ### Error envelope
+        **Every** error on an `/api` request returns this JSON shape — never an HTML page,
+        including 404s and unexpected 500s:
+        `{ "error": "<code>", "error_description": "<message>" }`.
+        Common codes by status: `400` invalid_json / invalid_request · `401` unauthorized ·
+        `403` (access denied) · `404` not_found · `409` conflict ·
+        `422` validation_error · `429` rate_limit_exceeded ·
+        `500` internal_server_error.
+
+        ### Webhooks
+        PayFast posts payment notifications (ITN) to `POST /webhooks/payfast/notify`
+        (server-to-server; signature + amount validated). This is **not** a client endpoint.
+        Charges/refunds simulate in sandbox (`PAYFAST_SANDBOX=true`) and call the live
+        PayFast API otherwise.
+
+        ### Key flows
+        - **Access & purchase:** access is decided by one gate. **Free** courses grant
+          access immediately. **Per-course** / **bundle** purchases return a signed PayFast
+          checkout → ITN marks the order paid → an entitlement is granted and the student
+          auto-enrolled. **Subscription** access covers all included courses while active.
+        - **Learn:** enroll → `GET /courses/{id}/learn` (gated) for lessons + progress →
+          stream lesson video → mark lessons complete → on finishing a certificate-enabled
+          course (passing its quiz where required) a certificate is issued.
+        - **Refund:** student opens a refund request (30-day window) → admin approval revokes
+          the entitlement and triggers the PayFast refund.
+        - **Recurring billing:** a scheduled job renews due subscriptions or expires
+          cancelled ones.
+servers:
+    - url: http://be-preview.codetrics.co.za/api/v1
+security:
+    - bearerAuth: []
+tags:
+    - name: Auth
+      description: >
+        Registration, login (JWT access + refresh), token refresh, email verification (OTP),
+        and password reset. Public — no token required. Register returns no token; log in afterwards.
+    - name: Profile
+      description: >
+        The authenticated user's profile (separate from auth identity): name, bio, locale,
+        and avatar upload/streaming. The avatar field is an absolute URL to the stream endpoint.
+    - name: Catalog
+      description: Public-facing course discovery — the paginated catalogue with search, category, and level filters.
+    - name: Courses
+      description: >
+        Course CRUD for teachers (own courses, record-level voter checks) and reads for students.
+        Courses carry pricing flags (free / purchasable / included-in-subscription) that feed the access gate.
+    - name: Lessons
+      description: >
+        Lesson authoring within a course (owner only) and reads for students. Lessons may host a
+        video (upload + access-gated range streaming) or reference an external embed via content_ref.
+    - name: Enrollment
+      description: >
+        Enroll the current student in a course and list enrollments. Enrolling requires access
+        (free course, or an entitlement / active subscription); content stays gated until then.
+    - name: Progress
+      description: >
+        The learn view (lessons + computed progress for a course) and marking lessons complete.
+        Completing a certificate-enabled course issues a certificate.
+    - name: Review
+      description: >
+        Course reviews & ratings. A student may review a course they are enrolled in once;
+        posting/updating refreshes the course's cached rating average and count.
+    - name: Certificate
+      description: >
+        Completion certificates (PDF). Issued automatically on completing a certificate-enabled
+        course. Includes a public verification endpoint keyed by a URL-safe credential id.
+    - name: Quiz
+      description: >
+        Course quizzes — questions, choices, and attempts. Where a course requires a quiz, passing
+        it is part of the certificate gate. Correct-answer flags are never exposed to students.
+    - name: Orders
+      description: >
+        One-off purchases (per-course or bundle) via signed PayFast checkout, plus the buyer's order
+        history. Payment is confirmed asynchronously by the PayFast ITN webhook.
+    - name: Subscription
+      description: >
+        Subscription plans, subscribe/cancel, and the payment ledger. Active subscriptions grant
+        access to all included courses; renewals/expiry are handled by the billing scheduler. No refunds.
+    - name: PaymentMethods
+      description: >
+        Saved PayFast card tokens (libsodium-encrypted), multiple per user with a default. Captured via a
+        tokenization checkout routed through the ITN webhook; used for subscription charges.
+    - name: Bundles
+      description: >
+        Teacher-owned course bundles (a set of the owner's published courses) sold one-off. A paid bundle
+        grants entitlements for every course in it and auto-enrolls the buyer.
+    - name: Community
+      description: >
+        Community hub — posts (tag, body, optional image/link), comments, likes, and trending topics.
+        Authors (or admins) edit/delete; all actions require a logged-in student.
+    - name: Blog
+      description: >
+        Marketing blog. Reads are public; authoring (create/update/publish/cover) requires ROLE_TEACHER
+        and is owner/admin-gated. Blog category management is admin-only.
+    - name: Newsletter
+      description: >
+        Public, rate-limited newsletter signup with double opt-in (confirm by email) and a one-click
+        token unsubscribe.
+    - name: Analytics
+      description: >
+        Admin dashboard metrics — overview KPIs (users, revenue, MRR, subscriptions, enrollments,
+        reviews), revenue & enrollment time-series, and top courses. ROLE_ADMIN only.
+    - name: Admin
+      description: >
+        Admin operations — coupons, refund approval, blog categories, the student directory, the
+        UserLog activity feed, and segmented email campaigns. ROLE_ADMIN only.
+paths:
+    /auth/register:
+        post:
+            tags: [Auth]
+            summary: Register a new user
+            description: Creates a user and its profile. Returns no token — log in afterwards. Public endpoint.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, password, first_name, last_name]
+                            properties:
+                                email: { type: string, format: email, example: jane@example.com }
+                                password: { type: string, format: password, minLength: 8, example: s3cretpass }
+                                first_name: { type: string, example: Jane }
+                                last_name: { type: string, example: Doe }
+            responses:
+                '201':
+                    description: User created
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    user: { $ref: '#/components/schemas/User' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/login:
+        post:
+            tags: [Auth]
+            summary: Authenticate and obtain tokens
+            description: Returns a JWT access token and a refresh token. Public endpoint.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, password]
+                            properties:
+                                email: { type: string, format: email, example: jane@example.com }
+                                password: { type: string, format: password, example: s3cretpass }
+            responses:
+                '200':
+                    description: Authenticated
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    token: { type: string, description: JWT access token (TTL 1h) }
+                                    refresh_token: { type: string, description: Refresh token (TTL 30d) }
+                            example:
+                                token: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3...
+                                refresh_token: 9c1f0e...d2b7
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /auth/refresh:
+        post:
+            tags: [Auth]
+            summary: Exchange a refresh token for a new access token
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [refresh_token]
+                            properties:
+                                refresh_token: { type: string }
+            responses:
+                '200':
+                    description: New tokens issued
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    token: { type: string }
+                                    refresh_token: { type: string }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /auth/verify-email/request:
+        post:
+            tags: [Auth]
+            summary: Request an email-verification code
+            description: Always returns 200 (does not reveal whether the email exists).
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email]
+                            properties:
+                                email: { type: string, format: email }
+            responses:
+                '200': { description: Code sent if the email exists }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/verify-email:
+        post:
+            tags: [Auth]
+            summary: Verify an email with a code
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, code]
+                            properties:
+                                email: { type: string, format: email }
+                                code: { type: string, example: '314832' }
+            responses:
+                '200': { description: Email verified }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/password/forgot:
+        post:
+            tags: [Auth]
+            summary: Request a password-reset code
+            description: Always returns 200 (does not reveal whether the email exists).
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email]
+                            properties:
+                                email: { type: string, format: email }
+            responses:
+                '200': { description: Code sent if the email exists }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/password/reset:
+        post:
+            tags: [Auth]
+            summary: Reset a password with a code
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email, code, password]
+                            properties:
+                                email: { type: string, format: email }
+                                code: { type: string, example: '289430' }
+                                password: { type: string, format: password, minLength: 8 }
+            responses:
+                '200': { description: Password updated }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /profile:
+        get:
+            tags: [Profile]
+            summary: Get the authenticated user's profile
+            responses:
+                '200':
+                    description: The profile
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    profile: { $ref: '#/components/schemas/Profile' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+        patch:
+            tags: [Profile]
+            summary: Update the authenticated user's profile
+            description: All fields optional; only provided fields are updated.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                first_name: { type: string }
+                                last_name: { type: string }
+                                bio: { type: string, nullable: true }
+                                phone: { type: string, nullable: true }
+                                locale: { type: string, example: en }
+                                timezone: { type: string, example: Africa/Johannesburg }
+            responses:
+                '200':
+                    description: Updated profile
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    profile: { $ref: '#/components/schemas/Profile' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /profile/avatar:
+        get:
+            tags: [Profile]
+            summary: Stream the authenticated user's avatar image
+            responses:
+                '200':
+                    description: The avatar image
+                    content:
+                        image/*:
+                            schema: { type: string, format: binary }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Profile]
+            summary: Upload or replace the avatar
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [avatar]
+                            properties:
+                                avatar:
+                                    type: string
+                                    format: binary
+                                    description: JPEG, PNG or WebP, max 2 MB
+            responses:
+                '200':
+                    description: Updated profile with new avatar URL
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    profile: { $ref: '#/components/schemas/Profile' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Profile]
+            summary: Remove the avatar
+            responses:
+                '204': { description: Avatar removed }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /categories:
+        get:
+            tags: [Catalog]
+            summary: List course categories
+            responses:
+                '200':
+                    description: Categories
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    categories:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Category' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /courses:
+        get:
+            tags: [Courses]
+            summary: List courses (paginated)
+            description: Returns published courses. Teachers also see their own drafts.
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+                - { name: category, in: query, schema: { type: string }, description: Category slug }
+                - { name: level, in: query, schema: { type: string, enum: [beginner, intermediate, advanced] } }
+                - { name: q, in: query, schema: { type: string }, description: Title search }
+            responses:
+                '200':
+                    description: Paginated courses
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    courses:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Course' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+        post:
+            tags: [Courses]
+            summary: Create a course (draft)
+            description: Requires ROLE_TEACHER. The slug is generated from the title.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title, category_id]
+                            properties:
+                                title: { type: string }
+                                category_id: { type: string, description: Category ULID }
+                                description: { type: string, nullable: true }
+                                tagline: { type: string, nullable: true }
+                                level: { type: string, enum: [beginner, intermediate, advanced] }
+                                price_amount_cents: { type: integer, example: 450000 }
+                                price_currency: { type: string, example: ZAR }
+                                tags: { type: array, items: { type: string } }
+                                objectives: { type: array, items: { type: string } }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /courses/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Courses]
+            summary: Get a course
+            responses:
+                '200':
+                    description: The course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Courses]
+            summary: Update a course (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                title: { type: string }
+                                category_id: { type: string }
+                                description: { type: string, nullable: true }
+                                tagline: { type: string, nullable: true }
+                                level: { type: string, enum: [beginner, intermediate, advanced] }
+                                price_amount_cents: { type: integer }
+                                price_currency: { type: string }
+                                tags: { type: array, items: { type: string } }
+                                objectives: { type: array, items: { type: string } }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Courses]
+            summary: Delete a course (owner only)
+            responses:
+                '204': { description: Course deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/publish:
+        post:
+            tags: [Courses]
+            summary: Publish a course (owner only)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '200':
+                    description: Published course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{courseId}/lessons:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Lessons]
+            summary: List a course's lessons
+            description: Non-owners see published lessons only.
+            responses:
+                '200':
+                    description: Lessons (ordered by position)
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lessons:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Lesson' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Lessons]
+            summary: Add a lesson (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title, type]
+                            properties:
+                                title: { type: string }
+                                type: { type: string, enum: [video, doc] }
+                                body: { type: string, nullable: true }
+                                status: { type: string, enum: [draft, published] }
+                                duration_minutes: { type: integer, nullable: true }
+                                content_ref: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created lesson
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /courses/{courseId}/lessons/{id}:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+            - { name: id, in: path, required: true, schema: { type: string }, description: Lesson ULID }
+        get:
+            tags: [Lessons]
+            summary: Get a lesson
+            responses:
+                '200':
+                    description: The lesson
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Lessons]
+            summary: Update a lesson (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                title: { type: string }
+                                type: { type: string, enum: [video, doc] }
+                                body: { type: string, nullable: true }
+                                status: { type: string, enum: [draft, published] }
+                                duration_minutes: { type: integer, nullable: true }
+                                content_ref: { type: string, nullable: true }
+                                position: { type: integer }
+            responses:
+                '200':
+                    description: Updated lesson
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Lessons]
+            summary: Delete a lesson (owner only)
+            responses:
+                '204': { description: Lesson deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{courseId}/lessons/{id}/video:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+            - { name: id, in: path, required: true, schema: { type: string }, description: Lesson ULID }
+        get:
+            tags: [Lessons]
+            summary: Stream a lesson's hosted video
+            description: >-
+                Access-gated: the course owner, or a student with a valid entitlement to a published lesson
+                (same gate as the learn view). Returns the video with HTTP Range support (206 partial content)
+                for seeking; served via X-Sendfile when available.
+            responses:
+                '200': { description: The video binary (supports Range), content: { 'video/*': { schema: { type: string, format: binary } } } }
+                '206': { description: Partial content (Range request) }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Lessons]
+            summary: Upload a lesson video (owner only)
+            description: Accepts MP4, WebM or QuickTime. Replaces any existing video. Stored as platform-hosted media (distinct from content_ref embeds).
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [video]
+                            properties:
+                                video: { type: string, format: binary }
+            responses:
+                '200':
+                    description: Lesson with stored video
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    lesson: { $ref: '#/components/schemas/Lesson' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Lessons]
+            summary: Remove a lesson's hosted video (owner only)
+            responses:
+                '204': { description: Video removed }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/enroll:
+        post:
+            tags: [Enrollment]
+            summary: Enroll the current student in a course
+            description: Course must be published. Creates a pending (unpaid) enrollment.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '201':
+                    description: Created enrollment
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enrollment: { $ref: '#/components/schemas/Enrollment' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /enrollments:
+        get:
+            tags: [Enrollment]
+            summary: List my enrollments (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: My enrollments
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enrollments:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Enrollment' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /enrollments/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Enrollment ULID }
+        get:
+            tags: [Enrollment]
+            summary: Get one of my enrollments (with progress)
+            responses:
+                '200':
+                    description: The enrollment
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enrollment: { $ref: '#/components/schemas/Enrollment' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Enrollment]
+            summary: Unenroll (deletes the enrollment and its progress)
+            responses:
+                '204': { description: Unenrolled }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/reviews:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Review]
+            summary: List a course's reviews (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: The course's reviews
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    reviews:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Review' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Review]
+            summary: Review a course
+            description: The student must be enrolled in the course and may review it only once. Posting refreshes the course's cached rating average and count.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [rating]
+                            properties:
+                                rating: { type: integer, minimum: 1, maximum: 5 }
+                                body: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created review
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    review: { $ref: '#/components/schemas/Review' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /reviews/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Review ULID }
+        patch:
+            tags: [Review]
+            summary: Update my review
+            description: Only the review's author may update it. Recomputes the course's cached rating stats.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                rating: { type: integer, minimum: 1, maximum: 5 }
+                                body: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated review
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    review: { $ref: '#/components/schemas/Review' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Review]
+            summary: Delete my review
+            description: Only the review's author may delete it. Recomputes the course's cached rating stats.
+            responses:
+                '204': { description: Review deleted }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /certificates:
+        get:
+            tags: [Certificate]
+            summary: List my certificates (paginated)
+            description: Certificates are issued automatically when a student completes a certificate-enabled course.
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: My certificates
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    certificates:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Certificate' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /certificates/{id}/download:
+        get:
+            tags: [Certificate]
+            summary: Download my certificate as a PDF
+            description: Streams the certificate as an inline landscape A4 PDF. Owner only.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Certificate ULID }
+            responses:
+                '200':
+                    description: The certificate PDF
+                    content:
+                        application/pdf:
+                            schema: { type: string, format: binary }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /certificates/verify/{credentialId}:
+        get:
+            tags: [Certificate]
+            summary: Publicly verify a certificate by its credential ID
+            description: Public endpoint (no authentication). Returns the certificate's issue-time snapshot so a third party can confirm it is genuine. No PDF is returned.
+            security: []
+            parameters:
+                - { name: credentialId, in: path, required: true, schema: { type: string }, description: '32-character hex credential token' }
+            responses:
+                '200':
+                    description: The certificate is valid
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    valid: { type: boolean, example: true }
+                                    certificate: { $ref: '#/components/schemas/Certificate' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/quiz:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Quiz]
+            summary: Get the course's quiz (take-view)
+            description: Returns the quiz with its questions and choices. Correct-answer flags are never included.
+            responses:
+                '200':
+                    description: The quiz
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    quiz: { $ref: '#/components/schemas/Quiz' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Quiz]
+            summary: Create or replace the course's quiz (owner only)
+            description: Atomically replaces the course's quiz definition. Each question must have exactly one correct choice. Existing attempts are kept as history.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title, questions]
+                            properties:
+                                title: { type: string }
+                                pass_threshold_percent: { type: integer, minimum: 1, maximum: 100, default: 70 }
+                                questions:
+                                    type: array
+                                    items:
+                                        type: object
+                                        required: [text, choices]
+                                        properties:
+                                            text: { type: string }
+                                            choices:
+                                                type: array
+                                                items:
+                                                    type: object
+                                                    required: [text, is_correct]
+                                                    properties:
+                                                        text: { type: string }
+                                                        is_correct: { type: boolean }
+            responses:
+                '200':
+                    description: The saved quiz
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    quiz: { $ref: '#/components/schemas/Quiz' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /courses/{id}/quiz/attempts:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Quiz]
+            summary: List my attempts at this course's quiz (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: My quiz attempts
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    attempts:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/QuizAttempt' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Quiz]
+            summary: Submit answers to the course's quiz
+            description: Grades the submission and records the attempt. The student must be enrolled. Passing the quiz when the course content is also complete issues the certificate.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [answers]
+                            properties:
+                                answers:
+                                    type: object
+                                    description: 'Map of question ULID to the chosen choice ULID'
+                                    additionalProperties: { type: string }
+            responses:
+                '201':
+                    description: The graded attempt
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    attempt: { $ref: '#/components/schemas/QuizAttempt' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /courses/{id}/purchase:
+        post:
+            tags: [Orders]
+            summary: Start a one-off purchase of a course
+            description: Creates a pending order and returns the signed PayFast checkout fields to POST to PayFast. Course must be published and purchasable.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                coupon_code: { type: string, nullable: true, description: Optional discount code }
+            responses:
+                '201':
+                    description: Pending order + PayFast checkout
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    order: { $ref: '#/components/schemas/Order' }
+                                    payfast:
+                                        type: object
+                                        properties:
+                                            url: { type: string, description: PayFast process URL to POST the form to }
+                                            fields: { type: object, additionalProperties: { type: string }, description: Signed form fields (incl. signature) }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /orders:
+        get:
+            tags: [Orders]
+            summary: List my orders (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: My orders
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    orders:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Order' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /orders/{id}:
+        get:
+            tags: [Orders]
+            summary: Get one of my orders
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Order ULID }
+            responses:
+                '200':
+                    description: The order
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    order: { $ref: '#/components/schemas/Order' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /orders/{id}/refund-request:
+        post:
+            tags: [Orders]
+            summary: Request a refund for a paid order (within 30 days)
+            description: Creates a pending refund request. Admin approval and the actual PayFast refund happen later.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Order ULID }
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                reason: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Pending refund request
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    refund_request: { $ref: '#/components/schemas/RefundRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /bundles:
+        get:
+            tags: [Bundles]
+            summary: List bundles (paginated)
+            description: Published bundles; teachers also see their own drafts.
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Bundles
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    bundles: { type: array, items: { $ref: '#/components/schemas/Bundle' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+        post:
+            tags: [Bundles]
+            summary: Create a bundle (draft) — ROLE_TEACHER
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [title]
+                            properties:
+                                title: { type: string }
+                                description: { type: string, nullable: true }
+                                price_amount_cents: { type: integer }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '201':
+                    description: Created bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /bundles/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+        get:
+            tags: [Bundles]
+            summary: Get a bundle
+            responses:
+                '200':
+                    description: The bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Bundles]
+            summary: Update a bundle (owner only)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                title: { type: string }
+                                description: { type: string, nullable: true }
+                                price_amount_cents: { type: integer }
+                                thumbnail: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Bundles]
+            summary: Delete a bundle (owner only)
+            responses:
+                '204': { description: Bundle deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /bundles/{id}/courses:
+        put:
+            tags: [Bundles]
+            summary: Set the bundle's courses (owner only)
+            description: Each course must be one of the owner's own published courses.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [course_ids]
+                            properties:
+                                course_ids: { type: array, items: { type: string, description: Course ULID } }
+            responses:
+                '200':
+                    description: Updated bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /bundles/{id}/publish:
+        post:
+            tags: [Bundles]
+            summary: Publish a bundle (owner only)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+            responses:
+                '200':
+                    description: Published bundle
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /bundles/{id}/purchase:
+        post:
+            tags: [Bundles]
+            summary: Purchase a bundle (one-off) — grants all its courses
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Bundle ULID }
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                coupon_code: { type: string, nullable: true, description: Optional discount code }
+            responses:
+                '201':
+                    description: Pending order + PayFast checkout
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    order: { $ref: '#/components/schemas/Order' }
+                                    payfast:
+                                        type: object
+                                        properties:
+                                            url: { type: string }
+                                            fields: { type: object, additionalProperties: { type: string } }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/refund-requests:
+        get:
+            tags: [Admin]
+            summary: List pending refund requests (ROLE_ADMIN)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Pending refund requests
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    refund_requests: { type: array, items: { $ref: '#/components/schemas/RefundRequest' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/refund-requests/{id}/approve:
+        post:
+            tags: [Admin]
+            summary: Approve a refund — revokes access, refunds the order (ROLE_ADMIN)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Refund request ULID }
+            responses:
+                '200':
+                    description: Approved refund request
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { refund_request: { $ref: '#/components/schemas/RefundRequest' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/refund-requests/{id}/reject:
+        post:
+            tags: [Admin]
+            summary: Reject a refund request (ROLE_ADMIN)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Refund request ULID }
+            responses:
+                '200':
+                    description: Rejected refund request
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { refund_request: { $ref: '#/components/schemas/RefundRequest' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/coupons:
+        get:
+            tags: [Admin]
+            summary: List coupons (ROLE_ADMIN)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Coupons
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    coupons: { type: array, items: { $ref: '#/components/schemas/Coupon' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+        post:
+            tags: [Admin]
+            summary: Create a coupon (ROLE_ADMIN)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [code, discount_type, discount_value]
+                            properties:
+                                code: { type: string, example: SAVE20 }
+                                discount_type: { type: string, enum: [percent, fixed] }
+                                discount_value: { type: integer, description: 'Percent points (<=100) or cents for fixed' }
+                                max_redemptions: { type: integer, nullable: true }
+                                min_amount_cents: { type: integer, nullable: true }
+                                expires_at: { type: integer, nullable: true, description: Unix timestamp }
+                                is_active: { type: boolean }
+            responses:
+                '201':
+                    description: Created coupon
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { coupon: { $ref: '#/components/schemas/Coupon' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/coupons/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Coupon ULID }
+        patch:
+            tags: [Admin]
+            summary: Update a coupon (ROLE_ADMIN)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                discount_value: { type: integer }
+                                max_redemptions: { type: integer, nullable: true }
+                                min_amount_cents: { type: integer, nullable: true }
+                                expires_at: { type: integer, nullable: true }
+                                is_active: { type: boolean }
+            responses:
+                '200':
+                    description: Updated coupon
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { coupon: { $ref: '#/components/schemas/Coupon' } } }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Admin]
+            summary: Delete a coupon (ROLE_ADMIN)
+            responses:
+                '204': { description: Coupon deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /plans:
+        get:
+            tags: [Subscription]
+            summary: List active subscription plans
+            responses:
+                '200':
+                    description: Plans
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    plans:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/SubscriptionPlan' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /payment-methods/setup:
+        post:
+            tags: [PaymentMethods]
+            summary: Start adding a payment method (PayFast tokenization)
+            description: Returns signed PayFast tokenization checkout fields. The token is captured via the ITN webhook.
+            responses:
+                '200':
+                    description: PayFast tokenization checkout
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    payfast:
+                                        type: object
+                                        properties:
+                                            url: { type: string }
+                                            fields: { type: object, additionalProperties: { type: string } }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /payment-methods:
+        get:
+            tags: [PaymentMethods]
+            summary: List my active payment methods
+            responses:
+                '200':
+                    description: Payment methods
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    payment_methods:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/PaymentMethod' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /payment-methods/{id}/default:
+        patch:
+            tags: [PaymentMethods]
+            summary: Set a payment method as default
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Payment method ULID }
+            responses:
+                '200':
+                    description: Updated payment method
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /payment-methods/{id}:
+        delete:
+            tags: [PaymentMethods]
+            summary: Remove a payment method
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Payment method ULID }
+            responses:
+                '204': { description: Removed }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /subscriptions:
+        post:
+            tags: [Subscription]
+            summary: Subscribe to a plan (charges the chosen card now)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [plan_id, payment_method_id]
+                            properties:
+                                plan_id: { type: string, description: Plan ULID }
+                                payment_method_id: { type: string, description: Payment method ULID }
+                                coupon_code: { type: string, nullable: true, description: 'Optional; discounts the first charge only' }
+            responses:
+                '201':
+                    description: Active subscription
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    subscription: { $ref: '#/components/schemas/Subscription' }
+                '402': { $ref: '#/components/responses/Forbidden' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /subscription:
+        get:
+            tags: [Subscription]
+            summary: Get my current subscription
+            responses:
+                '200':
+                    description: The subscription
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    subscription: { $ref: '#/components/schemas/Subscription' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /subscriptions/{id}/cancel:
+        post:
+            tags: [Subscription]
+            summary: Cancel a subscription at period end
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Subscription ULID }
+            responses:
+                '200':
+                    description: Updated subscription
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    subscription: { $ref: '#/components/schemas/Subscription' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{courseId}/lessons/{id}/complete:
+        parameters:
+            - { name: courseId, in: path, required: true, schema: { type: string }, description: Course ULID }
+            - { name: id, in: path, required: true, schema: { type: string }, description: Lesson ULID }
+        post:
+            tags: [Progress]
+            summary: Mark a lesson complete
+            description: Requires a paid enrollment. Any published lesson may be completed in any order.
+            responses:
+                '200':
+                    description: Updated progress
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    progress: { $ref: '#/components/schemas/Progress' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Progress]
+            summary: Undo a lesson completion
+            responses:
+                '200':
+                    description: Updated progress
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    progress: { $ref: '#/components/schemas/Progress' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /courses/{id}/learn:
+        get:
+            tags: [Progress]
+            summary: Learn view — ordered published lessons with per-student state
+            description: Requires a paid enrollment.
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '200':
+                    description: Lessons with state + overall progress
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    progress: { $ref: '#/components/schemas/Progress' }
+                                    lessons:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/LearnLesson' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts:
+        get:
+            tags: [Community]
+            summary: List community posts (paginated)
+            description: Published posts only, newest first. Filter by tag and free-text search.
+            parameters:
+                - { name: tag, in: query, schema: { type: string, enum: [resource, question, showcase, mentorship] }, description: Filter by tag }
+                - { name: q, in: query, schema: { type: string }, description: Free-text search across title and body }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: The community feed
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    posts:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/CommunityPost' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        post:
+            tags: [Community]
+            summary: Create a community post
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [tag, title, body]
+                            properties:
+                                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                                title: { type: string, minLength: 3, maxLength: 200 }
+                                body: { type: string, maxLength: 10000 }
+                                link_url: { type: string, nullable: true, description: Optional related link }
+            responses:
+                '201':
+                    description: Created post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /community/trending:
+        get:
+            tags: [Community]
+            summary: Trending topics
+            description: Post counts grouped by tag across published posts, busiest first.
+            responses:
+                '200':
+                    description: Trending topics
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    topics:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                                                count: { type: integer }
+    /community/posts/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        get:
+            tags: [Community]
+            summary: Get a community post
+            responses:
+                '200':
+                    description: The post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Community]
+            summary: Update a community post
+            description: Only the author or an admin may update the post.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                                title: { type: string, minLength: 3, maxLength: 200 }
+                                body: { type: string, maxLength: 10000 }
+                                link_url: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Community]
+            summary: Delete a community post
+            description: Only the author or an admin may delete the post.
+            responses:
+                '204': { description: Post deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/image:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        get:
+            tags: [Community]
+            summary: Stream a post's image
+            responses:
+                '200': { description: The image binary, content: { image/*: { schema: { type: string, format: binary } } } }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Community]
+            summary: Upload a post image
+            description: Only the author or an admin may upload. Accepts JPEG, PNG or WebP up to 4MB. Replaces any existing image.
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [image]
+                            properties:
+                                image: { type: string, format: binary }
+            responses:
+                '200':
+                    description: Post with stored image
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /community/posts/{id}/like:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        post:
+            tags: [Community]
+            summary: Toggle a like on a post
+            description: Likes the post if not already liked, otherwise removes the like. Returns the resulting state and refreshed count.
+            responses:
+                '200':
+                    description: Like state
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    liked: { type: boolean }
+                                    like_count: { type: integer }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/comments:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        get:
+            tags: [Community]
+            summary: List a post's comments (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: The post's comments
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    comments:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/CommunityComment' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Community]
+            summary: Comment on a post
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [body]
+                            properties:
+                                body: { type: string, maxLength: 2000 }
+            responses:
+                '201':
+                    description: Created comment
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    comment: { $ref: '#/components/schemas/CommunityComment' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/hide:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        post:
+            tags: [Community]
+            summary: Hide a post (admin moderation)
+            description: Admin only. A hidden post disappears from the feed and is not readable/commentable/likeable by other students.
+            responses:
+                '200':
+                    description: Hidden post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/unhide:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        post:
+            tags: [Community]
+            summary: Unhide a post (admin moderation)
+            description: Admin only. Restores a hidden post to published.
+            responses:
+                '200':
+                    description: Published post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/comments/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Comment ULID }
+        delete:
+            tags: [Community]
+            summary: Delete a comment
+            description: The comment author, the post author, or an admin may delete it. Refreshes the post's cached comment count.
+            responses:
+                '204': { description: Comment deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts:
+        get:
+            tags: [Blog]
+            summary: List published blog posts (paginated)
+            description: Public endpoint. Featured posts first, then newest. Filter by category slug.
+            security: []
+            parameters:
+                - { name: category, in: query, schema: { type: string }, description: Filter by category slug }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 9 } }
+            responses:
+                '200':
+                    description: The blog feed
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    posts:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/BlogPost' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+        post:
+            tags: [Blog]
+            summary: Create a blog post (draft)
+            description: Requires ROLE_TEACHER. The post starts as a draft; read time is computed from the body.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [category_id, title, excerpt, body]
+                            properties:
+                                category_id: { type: string, description: BlogCategory ULID }
+                                title: { type: string, minLength: 3, maxLength: 255 }
+                                excerpt: { type: string, maxLength: 500 }
+                                body: { type: string }
+            responses:
+                '201':
+                    description: Created draft post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/categories:
+        get:
+            tags: [Blog]
+            summary: List blog categories
+            description: Public endpoint.
+            security: []
+            responses:
+                '200':
+                    description: Blog categories
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    categories:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/BlogCategory' }
+    /blog/posts/{slug}:
+        parameters:
+            - { name: slug, in: path, required: true, schema: { type: string }, description: Blog post slug }
+        get:
+            tags: [Blog]
+            summary: Get a published blog post by slug
+            description: Public endpoint. Only published posts are returned.
+            security: []
+            responses:
+                '200':
+                    description: The post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        patch:
+            tags: [Blog]
+            summary: Update a blog post
+            description: Author or admin only. Recomputes read time when the body changes.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                category_id: { type: string }
+                                title: { type: string, minLength: 3, maxLength: 255 }
+                                excerpt: { type: string, maxLength: 500 }
+                                body: { type: string }
+                                is_featured: { type: boolean }
+            responses:
+                '200':
+                    description: Updated post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Blog]
+            summary: Delete a blog post
+            description: Author or admin only.
+            responses:
+                '204': { description: Post deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}/publish:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        post:
+            tags: [Blog]
+            summary: Publish a blog post
+            description: Author or admin only. Sets publishedAt on first publish.
+            responses:
+                '200':
+                    description: Published post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}/unpublish:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        post:
+            tags: [Blog]
+            summary: Unpublish a blog post (back to draft)
+            description: Author or admin only.
+            responses:
+                '200':
+                    description: Drafted post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}/cover:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        get:
+            tags: [Blog]
+            summary: Stream a post's cover image
+            description: Public endpoint.
+            security: []
+            responses:
+                '200': { description: The image binary, content: { image/*: { schema: { type: string, format: binary } } } }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Blog]
+            summary: Upload a post cover image
+            description: Author or admin only. Accepts JPEG, PNG or WebP up to 4MB. Replaces any existing cover.
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [cover]
+                            properties:
+                                cover: { type: string, format: binary }
+            responses:
+                '200':
+                    description: Post with stored cover
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/blog/categories:
+        post:
+            tags: [Blog]
+            summary: Create a blog category (admin)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [name]
+                            properties:
+                                name: { type: string, minLength: 2, maxLength: 100 }
+            responses:
+                '201':
+                    description: Created category
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    category: { $ref: '#/components/schemas/BlogCategory' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/blog/categories/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: BlogCategory ULID }
+        patch:
+            tags: [Blog]
+            summary: Rename a blog category (admin)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [name]
+                            properties:
+                                name: { type: string, minLength: 2, maxLength: 100 }
+            responses:
+                '200':
+                    description: Updated category
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    category: { $ref: '#/components/schemas/BlogCategory' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Blog]
+            summary: Delete a blog category (admin)
+            description: Fails with 409 if the category still has posts.
+            responses:
+                '204': { description: Category deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+    /newsletter/subscribe:
+        post:
+            tags: [Newsletter]
+            summary: Subscribe to the newsletter
+            description: >-
+                Public, rate-limited endpoint. Starts a double opt-in: a confirmation email is queued and the
+                subscription stays pending until the user confirms via GET /newsletter/confirm.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email]
+                            properties:
+                                email: { type: string, format: email }
+            responses:
+                '201': { description: Subscribed }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /newsletter/confirm:
+        get:
+            tags: [Newsletter]
+            summary: Confirm a newsletter subscription (double opt-in)
+            description: Public endpoint. Confirms a pending subscription via the token from the confirmation email.
+            security: []
+            parameters:
+                - { name: token, in: query, required: true, schema: { type: string } }
+            responses:
+                '200': { description: Subscription confirmed }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /newsletter/unsubscribe:
+        get:
+            tags: [Newsletter]
+            summary: Unsubscribe via token
+            description: Public endpoint. The token is delivered in the newsletter emails' unsubscribe link.
+            security: []
+            parameters:
+                - { name: token, in: query, required: true, schema: { type: string } }
+            responses:
+                '200': { description: Unsubscribed }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/analytics/overview:
+        get:
+            tags: [Analytics]
+            summary: Dashboard overview KPIs (admin)
+            description: Headline metrics across users, revenue, subscriptions, enrollments, courses and reviews. Money in cents (ZAR).
+            responses:
+                '200':
+                    description: Overview metrics
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    users:
+                                        type: object
+                                        properties:
+                                            total: { type: integer }
+                                            new_last_30_days: { type: integer }
+                                            verified: { type: integer }
+                                    revenue:
+                                        type: object
+                                        properties:
+                                            currency: { type: string, example: ZAR }
+                                            total_cents: { type: integer }
+                                            last_30_days_cents: { type: integer }
+                                            refunded_cents: { type: integer }
+                                            mrr_cents: { type: integer, description: Monthly recurring revenue (annual plans normalised /12) }
+                                    subscriptions:
+                                        type: object
+                                        additionalProperties: { type: integer }
+                                        description: Active/past_due/cancelled/expired counts keyed by status
+                                    enrollments:
+                                        type: object
+                                        properties:
+                                            total: { type: integer }
+                                            completed: { type: integer }
+                                    courses:
+                                        type: object
+                                        properties:
+                                            published: { type: integer }
+                                    reviews:
+                                        type: object
+                                        properties:
+                                            average_rating: { type: number, format: float }
+                                    refund_requests:
+                                        type: object
+                                        properties:
+                                            pending: { type: integer }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/analytics/revenue:
+        get:
+            tags: [Analytics]
+            summary: Revenue time-series (admin)
+            description: Paid orders + paid subscription payments bucketed by day or month. Defaults to the last 30 days.
+            parameters:
+                - { name: from, in: query, schema: { type: string, format: date }, description: 'Start date (YYYY-MM-DD)' }
+                - { name: to, in: query, schema: { type: string, format: date }, description: 'End date (YYYY-MM-DD)' }
+                - { name: interval, in: query, schema: { type: string, enum: [day, month], default: day } }
+            responses:
+                '200':
+                    description: Revenue series
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    interval: { type: string, enum: [day, month] }
+                                    from: { type: string, format: date }
+                                    to: { type: string, format: date }
+                                    series:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                bucket: { type: string }
+                                                amount_cents: { type: integer }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/analytics/enrollments:
+        get:
+            tags: [Analytics]
+            summary: Enrollment time-series (admin)
+            description: New enrollments bucketed by day or month. Defaults to the last 30 days.
+            parameters:
+                - { name: from, in: query, schema: { type: string, format: date } }
+                - { name: to, in: query, schema: { type: string, format: date } }
+                - { name: interval, in: query, schema: { type: string, enum: [day, month], default: day } }
+            responses:
+                '200':
+                    description: Enrollment series
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    interval: { type: string, enum: [day, month] }
+                                    from: { type: string, format: date }
+                                    to: { type: string, format: date }
+                                    series:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                bucket: { type: string }
+                                                count: { type: integer }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/analytics/top-courses:
+        get:
+            tags: [Analytics]
+            summary: Top published courses (admin)
+            description: Ranked by enrollment count or rating.
+            parameters:
+                - { name: by, in: query, schema: { type: string, enum: [enrollment, rating], default: enrollment } }
+                - { name: limit, in: query, schema: { type: integer, default: 5, maximum: 20 } }
+            responses:
+                '200':
+                    description: Ranked courses
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    by: { type: string, enum: [enrollment, rating] }
+                                    courses:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/students:
+        get:
+            tags: [Admin]
+            summary: Student directory (admin, paginated)
+            description: Search the user base by email or profile name and filter by account status.
+            parameters:
+                - { name: q, in: query, schema: { type: string }, description: Search email / first / last name }
+                - { name: status, in: query, schema: { type: string, enum: [active, suspended] } }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: Matching students
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    students:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/User' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/students/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: User ULID }
+        get:
+            tags: [Admin]
+            summary: Student detail with summary and recent activity (admin)
+            responses:
+                '200':
+                    description: Student detail
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    student: { $ref: '#/components/schemas/User' }
+                                    summary:
+                                        type: object
+                                        properties:
+                                            enrollments:
+                                                type: object
+                                                properties:
+                                                    total: { type: integer }
+                                                    completed: { type: integer }
+                                            orders:
+                                                type: object
+                                                properties:
+                                                    total: { type: integer }
+                                                    total_spent_cents: { type: integer }
+                                                    currency: { type: string, example: ZAR }
+                                            subscription_status: { type: string, nullable: true, enum: [active, past_due, cancelled, expired, null] }
+                                    recent_activity:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/UserLog' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/activity:
+        get:
+            tags: [Admin]
+            summary: Activity feed from UserLog (admin, paginated)
+            description: Audit/activity events, newest first, filterable by log type, free-text and a date window.
+            parameters:
+                - { name: type, in: query, schema: { type: string }, description: 'Log type slug (e.g. login, payment_completed)' }
+                - { name: q, in: query, schema: { type: string }, description: Search username / message }
+                - { name: from, in: query, schema: { type: string, format: date } }
+                - { name: to, in: query, schema: { type: string, format: date } }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 25 } }
+            responses:
+                '200':
+                    description: Activity events
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    activity:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/UserLog' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/email-campaigns:
+        get:
+            tags: [Admin]
+            summary: List email campaigns (admin, paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Campaigns
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaigns:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/EmailCampaign' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+        post:
+            tags: [Admin]
+            summary: Create an email campaign (draft)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [subject, heading, body, segment]
+                            properties:
+                                subject: { type: string, maxLength: 150 }
+                                heading: { type: string, maxLength: 150 }
+                                body: { type: string }
+                                segment: { type: string, enum: [all_students, active_subscribers, newsletter_subscribers] }
+            responses:
+                '201':
+                    description: Created draft campaign
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaign: { $ref: '#/components/schemas/EmailCampaign' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/email-campaigns/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: EmailCampaign ULID }
+        get:
+            tags: [Admin]
+            summary: Get an email campaign (admin)
+            responses:
+                '200':
+                    description: The campaign
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaign: { $ref: '#/components/schemas/EmailCampaign' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/email-campaigns/{id}/send:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: EmailCampaign ULID }
+        post:
+            tags: [Admin]
+            summary: Send a campaign (admin)
+            description: Queues one email per recipient in the segment via the notification pipeline. Idempotent guard — a sent campaign returns 409.
+            responses:
+                '200':
+                    description: Sent campaign with recipient count
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaign: { $ref: '#/components/schemas/EmailCampaign' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+components:
+    securitySchemes:
+        bearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+    parameters:
+        PageParam:
+            name: page
+            in: query
+            description: 1-based page number.
+            schema: { type: integer, default: 1, minimum: 1 }
+        LimitParam:
+            name: limit
+            in: query
+            description: Items per page.
+            schema: { type: integer, default: 10, minimum: 1 }
+    schemas:
+        User:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                email: { type: string, format: email }
+                roles: { type: array, items: { type: string } }
+                status: { type: string, enum: [active, suspended] }
+                email_verified: { type: boolean }
+                email_verified_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                profile: { $ref: '#/components/schemas/Profile' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Profile:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                first_name: { type: string }
+                last_name: { type: string }
+                display_name: { type: string, description: Computed from first and last name }
+                avatar: { type: string, nullable: true, description: 'Absolute URL to the avatar stream endpoint, or null' }
+                bio: { type: string, nullable: true }
+                phone: { type: string, nullable: true }
+                locale: { type: string, example: en }
+                timezone: { type: string, example: Africa/Johannesburg }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Error:
+            type: object
+            properties:
+                error: { type: string, example: validation_error }
+                error_description: { type: string, example: Email cannot be blank. }
+        Money:
+            type: object
+            properties:
+                amount_cents: { type: integer, example: 450000 }
+                currency: { type: string, example: ZAR }
+        Category:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                name: { type: string, example: Wealth }
+                slug: { type: string, example: wealth }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Course:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                title: { type: string }
+                slug: { type: string, description: Generated from the title }
+                tagline: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+                status: { type: string, enum: [draft, published, archived] }
+                level: { type: string, nullable: true, enum: [beginner, intermediate, advanced] }
+                category: { $ref: '#/components/schemas/Category' }
+                instructor:
+                    type: object
+                    description: Compact owner view (never exposes the owner's account)
+                    properties:
+                        id: { type: string }
+                        name: { type: string }
+                price: { $ref: '#/components/schemas/Money' }
+                is_free: { type: boolean }
+                is_purchasable: { type: boolean }
+                included_in_subscription: { type: boolean }
+                certificate_enabled: { type: boolean, description: 'Whether completing the course issues a certificate' }
+                requires_quiz: { type: boolean, description: 'Whether completion requires passing a quiz (defers auto-issuing until the quiz gate exists)' }
+                rating_average: { type: number, format: float, description: 'Cached average of all review ratings (0 when none)', example: 4.5 }
+                rating_count: { type: integer, description: 'Cached number of reviews', example: 12 }
+                enrollment_count: { type: integer, description: 'Cached number of active enrollments', example: 87 }
+                tags: { type: array, items: { type: string } }
+                objectives: { type: array, items: { type: string } }
+                thumbnail: { type: string, nullable: true }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Lesson:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course_id: { type: string, description: Parent course ULID }
+                title: { type: string }
+                body: { type: string, nullable: true }
+                type: { type: string, enum: [video, doc] }
+                status: { type: string, enum: [draft, published] }
+                position: { type: integer }
+                duration_minutes: { type: integer, nullable: true }
+                content_ref: { type: string, nullable: true, description: External embed reference (e.g. a YouTube/Vimeo URL) }
+                video_url: { type: string, nullable: true, description: 'Absolute URL to the hosted-video stream endpoint, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Pagination:
+            type: object
+            properties:
+                current_page: { type: integer, example: 1 }
+                items_per_page: { type: integer, example: 10 }
+                total_items: { type: integer, example: 42 }
+                total_pages: { type: integer, example: 5 }
+        Progress:
+            type: object
+            properties:
+                progress_percent: { type: integer, example: 50 }
+                completed_count: { type: integer, example: 1 }
+                total_count: { type: integer, description: Published lessons only, example: 2 }
+                current_lesson_id: { type: string, nullable: true, description: 'First incomplete published lesson, or null if all done' }
+                status: { type: string, enum: [in_progress, completed] }
+        Enrollment:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course: { $ref: '#/components/schemas/Course' }
+                status: { type: string, enum: [in_progress, completed] }
+                completed_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                progress: { $ref: '#/components/schemas/Progress' }
+                created_at: { type: integer, description: Unix timestamp (enrolled-at) }
+                updated_at: { type: integer, description: Unix timestamp }
+        Review:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course_id: { type: string, description: Reviewed course ULID }
+                reviewer: { type: string, description: Display name of the student who wrote the review }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                body: { type: string, nullable: true, description: 'Optional written review (max 2000 chars)' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        CommunityPost:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                author: { type: string, description: Display name of the author }
+                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                title: { type: string }
+                body: { type: string }
+                image: { type: string, nullable: true, description: 'Absolute URL to the image stream endpoint, or null' }
+                link_url: { type: string, nullable: true }
+                like_count: { type: integer }
+                comment_count: { type: integer }
+                status: { type: string, enum: [published, hidden] }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        CommunityComment:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                author: { type: string, description: Display name of the author }
+                body: { type: string }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        EmailCampaign:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                subject: { type: string }
+                heading: { type: string }
+                body: { type: string }
+                segment: { type: string, enum: [all_students, active_subscribers, newsletter_subscribers] }
+                status: { type: string, enum: [draft, sent] }
+                recipient_count: { type: integer }
+                sent_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        UserLog:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                type: { type: string, description: Log type slug }
+                username: { type: string, nullable: true }
+                message: { type: string }
+                ip_address: { type: string, nullable: true }
+                user_agent: { type: string, nullable: true }
+                context: { type: object, nullable: true, additionalProperties: true }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        BlogCategory:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                name: { type: string }
+                slug: { type: string }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        BlogPost:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                slug: { type: string }
+                category: { $ref: '#/components/schemas/BlogCategory' }
+                author: { type: string, description: Display name of the author }
+                title: { type: string }
+                excerpt: { type: string }
+                body: { type: string }
+                cover_image: { type: string, nullable: true, description: 'Absolute URL to the cover stream endpoint, or null' }
+                read_time_minutes: { type: integer, description: Estimated reading time in minutes }
+                is_featured: { type: boolean }
+                status: { type: string, enum: [draft, published] }
+                published_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Certificate:
+            type: object
+            description: 'Snapshot fields are captured at issue time so a later rename never alters an issued certificate.'
+            properties:
+                id: { type: string, description: ULID public identifier }
+                credential_id: { type: string, description: 'Public, URL-safe credential token used for verification', example: 6978e70cdc378abed468f32ac2ab63df }
+                course_id: { type: string, description: Course ULID }
+                student_name: { type: string, description: Recipient name at issue time }
+                course_title: { type: string, description: Course title at issue time }
+                instructor_name: { type: string, description: Instructor name at issue time }
+                created_at: { type: integer, description: Unix timestamp (issued-at) }
+                updated_at: { type: integer, description: Unix timestamp }
+        Choice:
+            type: object
+            description: 'A possible answer. The correct-answer flag is never exposed to students.'
+            properties:
+                id: { type: string, description: ULID public identifier }
+                text: { type: string }
+                position: { type: integer }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Question:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                text: { type: string }
+                type: { type: string, enum: [single_choice] }
+                position: { type: integer }
+                choices: { type: array, items: { $ref: '#/components/schemas/Choice' } }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Quiz:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course_id: { type: string, description: Course ULID }
+                title: { type: string }
+                pass_threshold_percent: { type: integer, minimum: 1, maximum: 100, description: 'Minimum score to pass', example: 70 }
+                questions: { type: array, items: { $ref: '#/components/schemas/Question' } }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        QuizAttempt:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                score_percent: { type: integer, description: 'Percentage of questions answered correctly' }
+                passed: { type: boolean }
+                answers:
+                    type: object
+                    description: 'Map of question ULID to the chosen choice ULID'
+                    additionalProperties: { type: string }
+                created_at: { type: integer, description: Unix timestamp (submitted-at) }
+                updated_at: { type: integer, description: Unix timestamp }
+        LearnLesson:
+            allOf:
+                - { $ref: '#/components/schemas/Lesson' }
+                - type: object
+                  properties:
+                      state: { type: string, enum: [done, current, upcoming] }
+        Order:
+            type: object
+            description: Exactly one of course or bundle is set.
+            properties:
+                id: { type: string, description: ULID public identifier }
+                course: { allOf: [{ $ref: '#/components/schemas/Course' }], nullable: true }
+                bundle: { allOf: [{ $ref: '#/components/schemas/Bundle' }], nullable: true }
+                amount: { $ref: '#/components/schemas/Money' }
+                discount_amount_cents: { type: integer, description: Coupon discount applied }
+                status: { type: string, enum: [pending, paid, cancelled, refunded] }
+                paid_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                refunded_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        RefundRequest:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                order_id: { type: string, description: Order ULID }
+                order: { $ref: '#/components/schemas/Order' }
+                reason: { type: string, nullable: true }
+                status: { type: string, enum: [pending, approved, rejected] }
+                resolved_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Coupon:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                code: { type: string, example: SAVE20 }
+                discount_type: { type: string, enum: [percent, fixed] }
+                discount_value: { type: integer, description: 'Percent points or cents' }
+                max_redemptions: { type: integer, nullable: true }
+                redemption_count: { type: integer }
+                min_amount_cents: { type: integer, nullable: true }
+                expires_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                is_active: { type: boolean }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Bundle:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                title: { type: string }
+                slug: { type: string }
+                description: { type: string, nullable: true }
+                price: { $ref: '#/components/schemas/Money' }
+                thumbnail: { type: string, nullable: true }
+                status: { type: string, enum: [draft, published] }
+                instructor: { type: object, properties: { id: { type: string }, name: { type: string } } }
+                courses: { type: array, items: { $ref: '#/components/schemas/Course' } }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        SubscriptionPlan:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                name: { type: string, example: Premium }
+                slug: { type: string, example: premium-monthly }
+                price: { $ref: '#/components/schemas/Money' }
+                interval: { type: string, enum: [monthly, annual] }
+                is_active: { type: boolean }
+        PaymentMethod:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                brand: { type: string, example: visa }
+                last4: { type: string, example: '4242' }
+                exp_month: { type: string, nullable: true, example: '12' }
+                exp_year: { type: string, nullable: true, example: '2030' }
+                is_default: { type: boolean }
+                status: { type: string, enum: [active, deleted] }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Subscription:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                plan: { $ref: '#/components/schemas/SubscriptionPlan' }
+                payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+                status: { type: string, enum: [active, past_due, cancelled, expired] }
+                current_period_start: { type: integer, description: Unix timestamp }
+                current_period_end: { type: integer, description: Unix timestamp }
+                cancel_at_period_end: { type: boolean }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+    responses:
+        BadRequest:
+            description: Malformed request or invalid JSON
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        Unauthorized:
+            description: Missing or invalid credentials
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        Forbidden:
+            description: Authenticated but not permitted (e.g. not the owner, or missing ROLE_TEACHER)
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        NotFound:
+            description: Resource not found
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        Conflict:
+            description: Conflicts with current state (e.g. already enrolled)
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        ValidationError:
+            description: Validation failed
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        RateLimited:
+            description: Too many requests
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }

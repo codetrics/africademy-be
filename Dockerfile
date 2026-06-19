@@ -5,13 +5,19 @@ FROM php:8.5-apache
 ARG APP_USER
 ARG APP_UID=1000
 ARG APP_GID=1000
+ARG NVM_VERSION=v0.40.1
+ARG NODE_VERSION=lts/krypton
 
 RUN test -n "$APP_USER" || (echo "APP_USER build arg is required" && exit 1)
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Image (OS) timezone — keeps the system clock, Apache logs and PHP all on SAST.
+ENV TZ=Africa/Johannesburg
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
         git \
         unzip \
         curl \
+        tzdata \
         libicu-dev \
         libzip-dev \
         libxml2-dev \
@@ -19,6 +25,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         acl \
         ca-certificates \
         default-mysql-client \
+        libapache2-mod-xsendfile \
+        chromium \
+        fonts-liberation \
+    && ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime \
+    && echo "${TZ}" > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install -j"$(nproc)" \
@@ -29,19 +40,42 @@ RUN docker-php-ext-install -j"$(nproc)" \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN a2enmod rewrite headers
+RUN a2enmod rewrite headers xsendfile
 
 RUN groupadd -g ${APP_GID} ${APP_USER} \
     && useradd -u ${APP_UID} -g ${APP_USER} -m -d /home/${APP_USER} -s /bin/bash ${APP_USER}
 
 ENV APACHE_RUN_USER=${APP_USER}
 ENV APACHE_RUN_GROUP=${APP_USER}
+ENV NVM_DIR=/home/${APP_USER}/.nvm
 ENV HOME=/home/${APP_USER}
+
+# Browsershot renders certificate PDFs through the system Chromium; puppeteer
+# must not download its own bundled build during `npm install`.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 RUN sed -ri "s!/var/www/html!/home/${APP_USER}/public_html/public!g" /etc/apache2/sites-available/000-default.conf \
     && printf '<Directory /home/%s/public_html/public/>\n    AllowOverride All\n    Require all granted\n</Directory>\n' "${APP_USER}" >> /etc/apache2/apache2.conf
+
+# X-Sendfile lets Apache stream hosted lesson videos; the upload endpoint alone
+# accepts large bodies (up to 10GB) while global php limits stay at the default.
+RUN printf '%s\n' \
+        'XSendFile On' \
+        "XSendFilePath /home/${APP_USER}/public_html/var/storage/lessons" \
+        '<LocationMatch "^/api/v[0-9]+/courses/[^/]+/lessons/[^/]+/video$">' \
+        '    php_value upload_max_filesize 10G' \
+        '    php_value post_max_size 11G' \
+        '    php_value max_input_time 3600' \
+        '    LimitRequestBody 11811160064' \
+        '</LocationMatch>' \
+    >> /etc/apache2/apache2.conf
+
+# mod_xsendfile is enabled above, so let Symfony emit the X-Sendfile header and
+# have Apache stream the bytes (BinaryFileResponse) instead of PHP.
+ENV SYMFONY_TRUST_X_SENDFILE_TYPE_HEADER=1
 
 RUN printf '%s\n' \
         'date.timezone = Africa/Johannesburg' \
@@ -76,6 +110,21 @@ RUN chown ${APP_USER}:${APP_USER} /home/${APP_USER}/public_html \
  && mkdir -p /home/${APP_USER}/public_html/var \
  && chown -R ${APP_USER}:${APP_USER} /home/${APP_USER}/public_html/var
 
+# Install nvm + Node — cached unless NODE_VERSION / NVM_VERSION changes
+USER ${APP_USER}
+RUN curl -fsSL -o /tmp/nvm-install.sh \
+        https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh \
+    && bash /tmp/nvm-install.sh \
+    && rm /tmp/nvm-install.sh \
+    && bash -c "source $NVM_DIR/nvm.sh && nvm install ${NODE_VERSION} && nvm alias default ${NODE_VERSION}"
+USER root
+
+# NPM dependencies — cached unless package.json / package-lock.json / webpack.config.js change
+COPY --chown=${APP_USER}:${APP_USER} package.json package-lock.json webpack.config.js ./
+USER ${APP_USER}
+RUN bash -c "source $NVM_DIR/nvm.sh && npm install"
+USER root
+
 # Composer dependencies — cached unless composer.json / composer.lock / symfony.lock change
 COPY --chown=${APP_USER}:${APP_USER} composer.json composer.lock symfony.lock ./
 USER ${APP_USER}
@@ -85,11 +134,14 @@ USER root
 # Application source — busts on any code change (expected)
 COPY --chown=${APP_USER}:${APP_USER} . /home/${APP_USER}/public_html
 
-# Final build: autoloader, env cache
+# Final build: assets, autoloader, env cache. Always re-runs on source change (correct)
 USER ${APP_USER}
-RUN composer dump-autoload --optimize --no-dev \
+RUN bash -c "source $NVM_DIR/nvm.sh \
+    && npm run build \
+    && npm prune --production \
+    && composer dump-autoload --optimize --no-dev \
     && composer dump-env prod \
-    && rm -f .env.local
+    && rm -f .env.local"
 USER root
 
 EXPOSE 80

@@ -7,6 +7,10 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    # Public base URL of this API, used to build absolute links (e.g. certificate
+    # verification URLs). Production overrides via the APP_BASE_URL env var.
+    app.base_url: '%env(default:app_base_url_default:APP_BASE_URL)%'
+    app_base_url_default: 'https://be-preview.codetrics.co.za'
 
 services:
     # default configuration for services in *this* file

@@ -1,0 +1,81 @@
+security:
+    # https://symfony.com/doc/current/security.html#registering-the-user-hashing-passwords
+    password_hashers:
+        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
+
+    role_hierarchy:
+        ROLE_TEACHER: [ROLE_STUDENT]
+        ROLE_ADMIN: [ROLE_TEACHER]
+
+    # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+        docs_user_provider:
+            entity:
+                class: App\Entity\DocsUser
+                property: username
+
+    firewalls:
+        dev:
+            # Ensure dev tools and static assets are always allowed
+            pattern: ^/(_profiler|_wdt|assets|build)/
+            security: false
+        docs:
+            # Swagger UI + raw spec, gated by HTTP Basic against a dedicated provider
+            pattern: ^/open-api
+            provider: docs_user_provider
+            stateless: true
+            http_basic:
+                realm: "Africademy API Docs"
+            login_throttling:
+                max_attempts: 5
+                interval: '15 minutes'
+        api:
+            pattern: ^/api
+            stateless: true
+            provider: app_user_provider
+            entry_point: jwt
+            jwt: ~
+            json_login:
+                check_path: api_auth_login
+                username_path: email
+                password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
+            refresh_jwt:
+                check_path: api_auth_refresh
+            login_throttling:
+                max_attempts: 5
+                interval: '15 minutes'
+        main:
+            # Catch-all: every remaining route runs through the security layer so
+            # nothing is served outside a firewall (deny-by-default below).
+            lazy: true
+            stateless: true
+            provider: app_user_provider
+
+    # Note: Only the *first* matching rule is applied
+    access_control:
+        - { path: ^/open-api, roles: ROLE_DOCS }
+        - { path: ^/health$, roles: PUBLIC_ACCESS }
+        - { path: ^/webhooks/, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/auth, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/certificates/verify, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/blog, methods: [GET], roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/newsletter, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: ROLE_STUDENT }
+        - { path: ^/, roles: ROLE_ADMIN }
+
+when@test:
+    security:
+        password_hashers:
+            # Password hashers are resource-intensive by design to ensure security.
+            # In tests, it's safe to reduce their cost to improve performance.
+            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
+                algorithm: auto
+                cost: 4 # Lowest possible value for bcrypt
+                time_cost: 3 # Lowest possible value for argon
+                memory_cost: 10 # Lowest possible value for argon

@@ -35,7 +35,7 @@ jobs:
         run: |
           ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
             ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} '
-            sudo mkdir -p "${{ env.DEPLOY_PATH }}/var/log" "${{ env.DEPLOY_PATH }}/var/storage"
+            sudo mkdir -p "${{ env.DEPLOY_PATH }}/var/log" "${{ env.DEPLOY_PATH }}/var/storage" "${{ env.DEPLOY_PATH }}/config/jwt"
             sudo chown -R "${{ secrets.C3_SSH_USER }}:${{ secrets.C3_SSH_USER }}" "${{ env.DEPLOY_PATH }}"
           '
 
@@ -51,7 +51,9 @@ jobs:
             --exclude='var/' \
             --exclude='vendor/' \
             --exclude='node_modules/' \
+            --exclude='public/build/' \
             --exclude='tests/' \
+            --exclude='config/jwt/' \
             --exclude='.env.local' \
             --exclude='.env.local.php' \
             --exclude='.env.*.local' \
@@ -67,6 +69,36 @@ jobs:
             "umask 077 && cat > '${{ env.DEPLOY_PATH }}/.env.local' && chmod 600 '${{ env.DEPLOY_PATH }}/.env.local'" <<'EOF'
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
+          APP_BASE_URL=${{ vars.APP_BASE_URL }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          MAILER_DSN=${{ secrets.MAILER_DSN }}
+          JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem
+          JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem
+          JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}
+          APP_SODIUM_AEAD_KEY=${{ secrets.APP_SODIUM_AEAD_KEY }}
+          PAYFAST_SANDBOX=${{ vars.PAYFAST_SANDBOX }}
+          PAYFAST_MERCHANT_ID=${{ secrets.PAYFAST_MERCHANT_ID }}
+          PAYFAST_MERCHANT_KEY=${{ secrets.PAYFAST_MERCHANT_KEY }}
+          PAYFAST_PASSPHRASE=${{ secrets.PAYFAST_PASSPHRASE }}
+          PAYFAST_RETURN_URL=${{ vars.PAYFAST_RETURN_URL }}
+          PAYFAST_CANCEL_URL=${{ vars.PAYFAST_CANCEL_URL }}
+          PAYFAST_NOTIFY_URL=${{ vars.PAYFAST_NOTIFY_URL }}
+          EOF
+
+      - name: Write JWT Private Key on Server
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "umask 077 && cat > '${{ env.DEPLOY_PATH }}/config/jwt/private.pem' && chmod 600 '${{ env.DEPLOY_PATH }}/config/jwt/private.pem'" <<'EOF'
+          ${{ secrets.JWT_PRIVATE_KEY }}
+          EOF
+
+      - name: Write JWT Public Key on Server
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "umask 022 && cat > '${{ env.DEPLOY_PATH }}/config/jwt/public.pem' && chmod 644 '${{ env.DEPLOY_PATH }}/config/jwt/public.pem'" <<'EOF'
+          ${{ secrets.JWT_PUBLIC_KEY }}
           EOF
 
       - name: Build and start testing_backend

@@ -1,6 +1,6 @@
 ---
 name: new-api-endpoint
-description: Add a new JSON API endpoint to an existing OpenApiController, or scaffold a new one. Use when the user asks to add an API route, REST endpoint, or client-facing API action. All API endpoints in this project live under /api/v3/, use JWT auth via ClientAuth, and return JsonResponse.
+description: Add a new JSON API endpoint to an existing ApiController, or scaffold a new one. Use when the user asks to add an API route, REST endpoint, or client-facing API action. All API endpoints in this project live under /api/{version}/, use JWT auth via User, and return JsonResponse.
 disable-model-invocation: false
 argument-hint: [ResourceName]
 allowed-tools: Read Write Edit Glob Grep Bash(ls *)
@@ -12,12 +12,12 @@ Scaffold a new API endpoint for the `$ARGUMENTS` resource.
 
 Existing API controllers:
 ```!
-ls src/Controller/ | grep OpenApi
+ls src/Controller/ | grep ApiController
 ```
 
 Check if a controller already exists for this resource:
 ```!
-ls src/Controller/$ARGUMENTSOpenApiController.php 2>/dev/null && echo "Controller exists — add endpoint to it" || echo "New controller needed"
+ls src/Controller/$ARGUMENTSApiController.php 2>/dev/null && echo "Controller exists — add endpoint to it" || echo "New controller needed"
 ```
 
 Existing services (to find or plan the backing service):
@@ -27,25 +27,40 @@ ls src/Service/*.php 2>/dev/null
 
 ## Instructions
 
-1. **Check if an `$ARGUMENTSOpenApiController` already exists** — if so, add the new action to it rather than creating a new file.
+1. **Check if an `$ARGUMENTSApiController` already exists** — if so, add the new action to it rather than creating a new file.
 2. **Read the existing controller first** (if it exists) to match its exact import list and code style.
-3. **Read `src/Controller/BillingOpenApiController.php`** as the canonical reference for the pattern.
+3. **Read an existing `*ApiController`** (if one exists) as a reference for the pattern; otherwise follow the templates below.
 4. Determine which HTTP method(s) the user wants — default to GET if unspecified.
-5. **No constructor** — all dependencies are injected as action-method parameters (autowired). Never add a constructor to an `OpenApiController`.
+5. **No constructor** — all dependencies are injected as action-method parameters (autowired). Never add a constructor to an `ApiController`.
 
 ## Mandatory action order (every endpoint, no exceptions)
 
-1. Auth check
-2. Request parsing
-3. Key/input validation
-4. Business logic (service calls)
-5. Response serialization
+1. Authorization gate — `#[IsGranted('ROLE_STUDENT')]` attribute on the action
+2. User narrowing (narrow the authenticated user for type-safety and data scoping)
+3. Request parsing
+4. Key/input validation
+5. Business logic (service calls)
+6. Response serialization
 
-## Auth check — always first
+## Authorization — declarative gate first
+
+Gate every action with the `#[IsGranted]` attribute — this is the auth gate. The
+firewall (stateless JWT) and `#[IsGranted]` reject unauthenticated/unauthorized
+requests, and the `kernel.exception` subscriber renders those security
+exceptions into the `JsonExceptionResponse` envelope. Use a Voter for
+record-level ownership checks.
+
+```php
+#[IsGranted('ROLE_STUDENT')]
+```
+
+Then narrow the authenticated user inside the action and use it to scope data
+access. The `instanceof` narrowing stays for type-safety (and as a defensive
+net) — it is **not** the auth gate:
 
 ```php
 $user = $this->getUser();
-if (!$user instanceof ClientAuth) {
+if (!$user instanceof User) {
     $exception = $this->createAccessDeniedException();
     return new JsonExceptionResponse(
         JsonExceptionResponse::ERROR_UNAUTHORIZED,
@@ -53,14 +68,13 @@ if (!$user instanceof ClientAuth) {
         Response::HTTP_UNAUTHORIZED
     );
 }
-$contact = $user->getContact();
 ```
 
 ## Request parsing rules
 
 - JSON body: `json_decode($request->getContent(), true)` + `json_last_error() !== JSON_ERROR_NONE` guard
 - Query params: `$request->query->getInt('key', default)` / `$request->query->getString('key')`
-- Route params: `$request->attributes->getInt('id')`
+- Route params: `$request->attributes->getString('id')` — public ids are ULIDs, look up via `findByPublicId*`. Constrain the route with `requirements: ['id' => Requirement::ULID]`. Never expose or accept the integer PK.
 - Never use `$_GET`, `$_POST`, or `$request->get()`
 
 ## Validation rules
@@ -84,12 +98,13 @@ $contact = $user->getContact();
 
 ```php
 #[Route(
-    '/api/v3/{resource}',
-    name: 'app_{resource}_open_api_get',
+    '/api/{version}/{resource}',
+    name: 'app_{resource}_api_get',
     requirements: ['_format' => 'json'],
     defaults: ['_format' => 'json'],
     methods: [Request::METHOD_GET],
 )]
+#[IsGranted('ROLE_STUDENT')]
 public function get{Resource}s(
     Request $request,
     {Resource}Service ${resource}Service,
@@ -97,7 +112,7 @@ public function get{Resource}s(
     SerializerService $serializerService,
 ): JsonResponse {
     $user = $this->getUser();
-    if (!$user instanceof ClientAuth) {
+    if (!$user instanceof User) {
         $exception = $this->createAccessDeniedException();
         return new JsonExceptionResponse(
             JsonExceptionResponse::ERROR_UNAUTHORIZED,
@@ -105,16 +120,15 @@ public function get{Resource}s(
             Response::HTTP_UNAUTHORIZED
         );
     }
-    $contact = $user->getContact();
 
     $page = $request->query->getInt('page', 1);
     $limit = $request->query->getInt('limit', 10);
 
-    $query = ${resource}Service->findByContactQuery($contact);
+    $query = ${resource}Service->findByUserQuery($user);
     $paginated = $paginator->paginate($query, $page, $limit);
 
     $dataJSON = $serializerService->serialize($paginated->getItems());
-    $paginationJSON = $serializerService->serialize(new PaginationReturnType($paginated));
+    $paginationJSON = $serializerService->serialize(new PaginationMeta($paginated));
 
     $response = new JsonResponse();
     $response->setData([
@@ -129,12 +143,13 @@ public function get{Resource}s(
 
 ```php
 #[Route(
-    '/api/v3/{resource}',
-    name: 'app_{resource}_open_api_post',
+    '/api/{version}/{resource}',
+    name: 'app_{resource}_api_post',
     requirements: ['_format' => 'json'],
     defaults: ['_format' => 'json'],
     methods: [Request::METHOD_POST],
 )]
+#[IsGranted('ROLE_STUDENT')]
 public function create{Resource}(
     Request $request,
     {Resource}Service ${resource}Service,
@@ -142,7 +157,7 @@ public function create{Resource}(
     ValidatorInterface $validator,
 ): JsonResponse {
     $user = $this->getUser();
-    if (!$user instanceof ClientAuth) {
+    if (!$user instanceof User) {
         $exception = $this->createAccessDeniedException();
         return new JsonExceptionResponse(
             JsonExceptionResponse::ERROR_UNAUTHORIZED,
@@ -150,7 +165,6 @@ public function create{Resource}(
             Response::HTTP_UNAUTHORIZED
         );
     }
-    $contact = $user->getContact();
 
     $data = json_decode($request->getContent(), true);
     if (json_last_error() !== JSON_ERROR_NONE) {
@@ -171,7 +185,7 @@ public function create{Resource}(
         );
     }
 
-    ${resource} = ${resource}Service->create($data['field_one'], $contact);
+    ${resource} = ${resource}Service->create($data['field_one'], $user);
 
     $violations = $validator->validate(${resource});
     foreach ($violations as $violation) {
@@ -194,19 +208,20 @@ public function create{Resource}(
 
 ```php
 #[Route(
-    '/api/v3/{resource}s/{id}',
-    name: 'app_{resource}_open_api_get_one',
-    requirements: ['_format' => 'json', 'id' => '\d+'],
+    '/api/{version}/{resource}s/{id}',
+    name: 'app_{resource}_api_get_one',
+    requirements: ['_format' => 'json', 'id' => Requirement::ULID],
     defaults: ['_format' => 'json'],
     methods: [Request::METHOD_GET],
 )]
+#[IsGranted('ROLE_STUDENT')]
 public function get{Resource}(
     Request $request,
     {Resource}Service ${resource}Service,
     SerializerService $serializerService,
 ): JsonResponse {
     $user = $this->getUser();
-    if (!$user instanceof ClientAuth) {
+    if (!$user instanceof User) {
         $exception = $this->createAccessDeniedException();
         return new JsonExceptionResponse(
             JsonExceptionResponse::ERROR_UNAUTHORIZED,
@@ -214,10 +229,9 @@ public function get{Resource}(
             Response::HTTP_UNAUTHORIZED
         );
     }
-    $contact = $user->getContact();
 
-    $id = $request->attributes->getInt('id');
-    ${resource} = ${resource}Service->findByIdAndContact($id, $contact);
+    $publicId = $request->attributes->getString('id');
+    ${resource} = ${resource}Service->findByPublicIdAndUser($publicId, $user);
 
     if (!${resource} instanceof {Resource}) {
         return new JsonExceptionResponse(
@@ -232,6 +246,68 @@ public function get{Resource}(
     $response->setData(['{resource}' => json_decode($dataJSON)]);
     return $response;
 }
+```
+
+## DELETE — 204 No Content
+
+```php
+#[Route(
+    '/api/{version}/{resource}s/{id}',
+    name: 'app_{resource}_api_delete',
+    requirements: ['_format' => 'json', 'id' => Requirement::ULID],
+    defaults: ['_format' => 'json'],
+    methods: [Request::METHOD_DELETE],
+)]
+#[IsGranted('ROLE_STUDENT')]
+public function delete{Resource}(
+    Request $request,
+    {Resource}Service ${resource}Service,
+): JsonResponse {
+    $user = $this->getUser();
+    if (!$user instanceof User) {
+        $exception = $this->createAccessDeniedException();
+        return new JsonExceptionResponse(
+            JsonExceptionResponse::ERROR_UNAUTHORIZED,
+            $exception->getMessage(),
+            Response::HTTP_UNAUTHORIZED
+        );
+    }
+
+    $publicId = $request->attributes->getString('id');
+    ${resource} = ${resource}Service->findByPublicIdAndUser($publicId, $user);
+
+    if (!${resource} instanceof {Resource}) {
+        return new JsonExceptionResponse(
+            JsonExceptionResponse::ERROR_NOT_FOUND,
+            '{Resource} not found',
+            Response::HTTP_NOT_FOUND
+        );
+    }
+
+    ${resource}Service->delete(${resource});
+
+    return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+}
+```
+
+## HTTP status semantics
+
+Set the status via `Response::HTTP_*` constants — never bare integers:
+
+| Action | Status |
+|---|---|
+| Read / update returning a body | `HTTP_OK` (200) |
+| Resource created | `HTTP_CREATED` (201) |
+| Delete / action with no body | `HTTP_NO_CONTENT` (204) |
+| Validation failure | `HTTP_UNPROCESSABLE_ENTITY` (422) |
+
+## Required imports
+
+In addition to the existing import list, these actions need:
+
+```php
+use Symfony\Component\Routing\Requirement\Requirement;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 ```
 
 Replace all `{resource}` / `{Resource}` placeholders with the lowercase/PascalCase form of `$ARGUMENTS`.

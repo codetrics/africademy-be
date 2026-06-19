@@ -1,0 +1,13 @@
+{% extends 'email/base.html.twig' %}
+
+{% block title %}Verify your email{% endblock %}
+
+{% block content %}
+    <h1 style="margin:0 0 16px; font-size:20px;">Verify your email</h1>
+    <p style="margin:0 0 16px;">Hi {{ first_name }},</p>
+    <p style="margin:0 0 16px; line-height:1.5;">Use the code below to verify your email address. It expires in {{ ttl_minutes }} minutes.</p>
+    <p style="margin:24px 0; text-align:center;">
+        <span style="display:inline-block; font-size:32px; font-weight:bold; letter-spacing:8px; background:#f4f4f5; padding:16px 24px; border-radius:12px;">{{ code }}</span>
+    </p>
+    <p style="margin:0; color:#71717a; font-size:13px;">If you didn't create an Africademy account, you can ignore this email.</p>
+{% endblock %}
