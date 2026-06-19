@@ -22,6 +22,10 @@ class NewsletterService
     }
 
     /**
+     * Starts a double opt-in: the subscription is created (or re-armed) as
+     * Pending and a confirmation email is queued. It only becomes Confirmed once
+     * the user clicks the emailed link (see confirm()).
+     *
      * @throws NewsletterException
      */
     public function subscribe(string $email): NewsletterSubscription
@@ -34,15 +38,38 @@ class NewsletterService
                 throw NewsletterException::alreadySubscribed();
             }
 
-            $existing->setStatus(NewsletterStatus::Confirmed);
+            $existing->setStatus(NewsletterStatus::Pending);
+            $existing->setConfirmationToken(bin2hex(random_bytes(16)));
             $this->newsletterSubscriptionRepository->save($existing, true);
-            $this->queueWelcomeEmail($existing);
+            $this->queueConfirmationEmail($existing);
 
             return $existing;
         }
 
         $subscription = new NewsletterSubscription();
         $subscription->setEmail($email);
+        $this->newsletterSubscriptionRepository->save($subscription, true);
+        $this->queueConfirmationEmail($subscription);
+
+        return $subscription;
+    }
+
+    /**
+     * Confirms a pending subscription via its emailed token. Idempotent for an
+     * already-confirmed subscription.
+     *
+     * @throws NewsletterException
+     */
+    public function confirm(string $token): NewsletterSubscription
+    {
+        $subscription = $this->newsletterSubscriptionRepository->findOneByConfirmationToken($token);
+
+        if (!$subscription instanceof NewsletterSubscription) {
+            throw NewsletterException::subscriptionNotFound();
+        }
+
+        $subscription->setStatus(NewsletterStatus::Confirmed);
+        $subscription->setConfirmationToken(null);
         $this->newsletterSubscriptionRepository->save($subscription, true);
         $this->queueWelcomeEmail($subscription);
 
@@ -64,6 +91,27 @@ class NewsletterService
         $this->newsletterSubscriptionRepository->save($subscription, true);
 
         return $subscription;
+    }
+
+    private function queueConfirmationEmail(NewsletterSubscription $subscription): void
+    {
+        $confirmUrl = $this->urlGenerator->generate(
+            'api_newsletter_confirm',
+            ['version' => 'v1', 'token' => (string) $subscription->getConfirmationToken()],
+            UrlGeneratorInterface::ABSOLUTE_URL,
+        );
+
+        $this->notificationService->createEmailNotification(
+            [$subscription->getEmail()],
+            'Confirm your Africademy newsletter subscription',
+            self::WELCOME_TEMPLATE,
+            [
+                'heading' => 'Confirm your subscription',
+                'body' => 'Please confirm you would like to receive the Africademy newsletter.',
+                'action_url' => $confirmUrl,
+                'action_label' => 'Confirm subscription',
+            ],
+        );
     }
 
     private function queueWelcomeEmail(NewsletterSubscription $subscription): void

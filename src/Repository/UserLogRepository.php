@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Entity\User;
 use App\Entity\UserLog;
 use DateTime;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -80,11 +81,11 @@ class UserLogRepository extends ServiceEntityRepository
     /**
      * @return UserLog[]
      */
-    public function findRecentByUsername(string $username, int $limit): array
+    public function findRecentByUser(User $user, int $limit): array
     {
         return $this->createQueryBuilder('userLog')
-            ->where('userLog.username = :username')
-            ->setParameter('username', $username)
+            ->where('userLog.user = :user')
+            ->setParameter('user', $user)
             ->orderBy('userLog.createdAt', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()

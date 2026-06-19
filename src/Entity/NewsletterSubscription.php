@@ -41,16 +41,32 @@ class NewsletterSubscription
     private string $email;
 
     #[ORM\Column(enumType: NewsletterStatus::class)]
-    private NewsletterStatus $status = NewsletterStatus::Confirmed;
+    private NewsletterStatus $status = NewsletterStatus::Pending;
 
     #[Exclude]
     #[ORM\Column(length: 64, unique: true)]
     private string $unsubscribeToken;
 
+    #[Exclude]
+    #[ORM\Column(length: 64, nullable: true, unique: true)]
+    private ?string $confirmationToken = null;
+
     public function __construct()
     {
         $this->initialisePublicId();
         $this->unsubscribeToken = bin2hex(random_bytes(16));
+        $this->confirmationToken = bin2hex(random_bytes(16));
+    }
+
+    public function getConfirmationToken(): ?string
+    {
+        return $this->confirmationToken;
+    }
+
+    public function setConfirmationToken(?string $confirmationToken): static
+    {
+        $this->confirmationToken = $confirmationToken;
+        return $this;
     }
 
     public function getId(): int

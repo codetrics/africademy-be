@@ -234,6 +234,38 @@ final class CommunityApiController extends AbstractController
     }
 
     #[Route(
+        '/api/{version}/community/posts/{id}/hide',
+        name: 'api_community_post_hide',
+        requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_POST],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function hide(
+        Request $request,
+        CommunityService $communityService,
+        SerializerService $serializerService,
+    ): JsonResponse {
+        return $this->moderate($request, $communityService, $serializerService, true);
+    }
+
+    #[Route(
+        '/api/{version}/community/posts/{id}/unhide',
+        name: 'api_community_post_unhide',
+        requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_POST],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function unhide(
+        Request $request,
+        CommunityService $communityService,
+        SerializerService $serializerService,
+    ): JsonResponse {
+        return $this->moderate($request, $communityService, $serializerService, false);
+    }
+
+    #[Route(
         '/api/{version}/community/posts/{id}/image',
         name: 'api_community_post_image_post',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
@@ -460,6 +492,24 @@ final class CommunityApiController extends AbstractController
         }
 
         return $data;
+    }
+
+    private function moderate(Request $request, CommunityService $communityService, SerializerService $serializerService, bool $hide): JsonResponse
+    {
+        try {
+            $post = $communityService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
+        } catch (CommunityException $exception) {
+            return $this->mapException($exception);
+        }
+
+        $this->denyAccessUnlessGranted(CommunityPostVoter::MODERATE, $post);
+
+        $hide ? $communityService->hidePost($post) : $communityService->unhidePost($post);
+
+        $response = new JsonResponse();
+        $response->setData(['post' => json_decode($serializerService->serialize($post))]);
+
+        return $response;
     }
 
     private function mapException(CommunityException $exception): JsonExceptionResponse

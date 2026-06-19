@@ -84,7 +84,7 @@ class AdminDirectoryService
      */
     public function recentActivity(User $student): array
     {
-        return $this->userLogRepository->findRecentByUsername($student->getEmail(), self::RECENT_ACTIVITY_LIMIT);
+        return $this->userLogRepository->findRecentByUser($student, self::RECENT_ACTIVITY_LIMIT);
     }
 
     public function activityFeedQueryBuilder(?string $typeSlug, ?string $search, ?DateTime $from, ?DateTime $to): QueryBuilder

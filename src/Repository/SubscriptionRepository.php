@@ -61,16 +61,17 @@ class SubscriptionRepository extends ServiceEntityRepository
     }
 
     /**
-     * Active subscriptions whose current period has ended (renew or expire).
+     * Active or past-due subscriptions whose current period has ended — to be
+     * renewed, retried, or expired by the billing job.
      *
      * @return Subscription[]
      */
     public function findDueForRenewal(DateTime $now): array
     {
         return $this->createQueryBuilder('subscription')
-            ->where('subscription.status = :active')
+            ->where('subscription.status IN (:dueStatuses)')
             ->andWhere('subscription.currentPeriodEnd <= :now')
-            ->setParameter('active', SubscriptionStatus::Active)
+            ->setParameter('dueStatuses', [SubscriptionStatus::Active, SubscriptionStatus::PastDue])
             ->setParameter('now', $now)
             ->getQuery()
             ->getResult();

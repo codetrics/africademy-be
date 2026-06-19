@@ -19,11 +19,14 @@ use App\Repository\SubscriptionRepository;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Ulid;
 use Throwable;
 
 class SubscriptionService
 {
+    private const int MAX_FAILED_ATTEMPTS = 3;
+
     public function __construct(
         private readonly SubscriptionPlanRepository $subscriptionPlanRepository,
         private readonly PaymentMethodRepository $paymentMethodRepository,
@@ -34,6 +37,7 @@ class SubscriptionService
         private readonly CouponService $couponService,
         private readonly UserLogService $userLogService,
         private readonly EntityManagerInterface $entityManager,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -121,6 +125,18 @@ class SubscriptionService
             $this->entityManager->commit();
         } catch (Exception $exception) {
             $this->entityManager->rollback();
+
+            // The card was already charged; compensate so the user isn't billed
+            // for a subscription that was never recorded.
+            if (!is_null($charge['pf_payment_id'] ?? null)) {
+                $this->payFastService->refund((string) $charge['pf_payment_id'], $chargeAmount);
+                $this->logger->critical('Subscription persistence failed after a successful charge; issued a compensating refund.', [
+                    'user' => $user->getEmail(),
+                    'pf_payment_id' => $charge['pf_payment_id'],
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
             throw $exception;
         }
 
@@ -216,11 +232,16 @@ class SubscriptionService
             $subscription->setStatus(SubscriptionStatus::Active);
             $subscription->setCurrentPeriodStart($periodStart);
             $subscription->setCurrentPeriodEnd($periodEnd);
+            $subscription->setFailedAttempts(0);
             $payment->setStatus(SubscriptionPaymentStatus::Paid);
             $payment->setPfPaymentId($pfPaymentId);
             $payment->setGatewayResponse('success');
         } else {
-            $subscription->setStatus(SubscriptionStatus::PastDue);
+            // Leave the period unchanged so the subscription stays "due" and is
+            // retried on the next run; expire it once the retry budget is spent.
+            $attempts = $subscription->getFailedAttempts() + 1;
+            $subscription->setFailedAttempts($attempts);
+            $subscription->setStatus($attempts >= self::MAX_FAILED_ATTEMPTS ? SubscriptionStatus::Expired : SubscriptionStatus::PastDue);
             $payment->setStatus(SubscriptionPaymentStatus::Failed);
             $payment->setGatewayResponse('failed');
         }

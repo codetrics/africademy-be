@@ -9,6 +9,7 @@ use App\Entity\Traits\TimestampableTrait;
 use App\Repository\UserLogRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use JMS\Serializer\Annotation\Exclude;
 use JMS\Serializer\Annotation\ExclusionPolicy;
 use JMS\Serializer\Annotation\Expose;
 use JMS\Serializer\Annotation\SerializedName;
@@ -33,6 +34,11 @@ class UserLog
     #[ORM\ManyToOne(targetEntity: UserLogType::class)]
     #[ORM\JoinColumn(name: 'user_log_type_id', referencedColumnName: 'id', nullable: false)]
     private UserLogType $userLogType;
+
+    #[Exclude]
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'user_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    private ?User $user = null;
 
     #[Expose]
     #[ORM\Column(length: 180, nullable: true)]
@@ -82,6 +88,17 @@ class UserLog
     public function setUserLogType(UserLogType $userLogType): static
     {
         $this->userLogType = $userLogType;
+        return $this;
+    }
+
+    public function getUser(): ?User
+    {
+        return $this->user;
+    }
+
+    public function setUser(?User $user): static
+    {
+        $this->user = $user;
         return $this;
     }
 

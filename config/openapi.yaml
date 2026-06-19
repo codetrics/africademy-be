@@ -1785,6 +1785,42 @@ paths:
                                     comment: { $ref: '#/components/schemas/CommunityComment' }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/hide:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        post:
+            tags: [Community]
+            summary: Hide a post (admin moderation)
+            description: Admin only. A hidden post disappears from the feed and is not readable/commentable/likeable by other students.
+            responses:
+                '200':
+                    description: Hidden post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/unhide:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        post:
+            tags: [Community]
+            summary: Unhide a post (admin moderation)
+            description: Admin only. Restores a hidden post to published.
+            responses:
+                '200':
+                    description: Published post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
     /community/comments/{id}:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: Comment ULID }
@@ -2071,11 +2107,23 @@ paths:
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
+    /newsletter/confirm:
+        get:
+            tags: [Newsletter]
+            summary: Confirm a newsletter subscription (double opt-in)
+            description: Public endpoint. Confirms a pending subscription via the token from the confirmation email.
+            security: []
+            parameters:
+                - { name: token, in: query, required: true, schema: { type: string } }
+            responses:
+                '200': { description: Subscription confirmed }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
     /newsletter/unsubscribe:
         get:
             tags: [Newsletter]
             summary: Unsubscribe via token
-            description: Public endpoint. The token is delivered in the welcome email's unsubscribe link.
+            description: Public endpoint. The token is delivered in the newsletter emails' unsubscribe link.
             security: []
             parameters:
                 - { name: token, in: query, required: true, schema: { type: string } }

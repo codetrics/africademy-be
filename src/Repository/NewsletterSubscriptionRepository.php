@@ -50,4 +50,9 @@ class NewsletterSubscriptionRepository extends ServiceEntityRepository
     {
         return $this->findOneBy(['unsubscribeToken' => $token]);
     }
+
+    public function findOneByConfirmationToken(string $token): ?NewsletterSubscription
+    {
+        return $this->findOneBy(['confirmationToken' => $token]);
+    }
 }

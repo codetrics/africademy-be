@@ -72,10 +72,24 @@ class Subscription
     #[Type("boolean")]
     private bool $cancelAtPeriodEnd = false;
 
+    #[ORM\Column(options: ['default' => 0])]
+    private int $failedAttempts = 0;
+
     public function __construct()
     {
         $this->initialisePublicId();
         $this->status = SubscriptionStatus::Active;
+    }
+
+    public function getFailedAttempts(): int
+    {
+        return $this->failedAttempts;
+    }
+
+    public function setFailedAttempts(int $failedAttempts): static
+    {
+        $this->failedAttempts = $failedAttempts;
+        return $this;
     }
 
     public function getId(): int

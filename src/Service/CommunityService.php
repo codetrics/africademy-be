@@ -81,6 +81,14 @@ class CommunityService
         return $post;
     }
 
+    public function unhidePost(CommunityPost $post): CommunityPost
+    {
+        $post->setStatus(CommunityPostStatus::Published);
+        $this->communityPostRepository->save($post, true);
+
+        return $post;
+    }
+
     public function setPostImage(CommunityPost $post, UploadedFile $file): CommunityPost
     {
         $storedPath = $this->communityImageUploadService->store($file, $post->getImagePath());

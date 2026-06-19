@@ -64,7 +64,32 @@ final class NewsletterApiController extends AbstractController
             return new JsonExceptionResponse($exception->getErrorType(), $exception->getMessage(), $exception->getStatusCode());
         }
 
-        return new JsonResponse(['message' => 'Subscribed. Check your inbox to confirm.'], Response::HTTP_CREATED);
+        return new JsonResponse(['message' => 'Almost there — check your inbox to confirm your subscription.'], Response::HTTP_CREATED);
+    }
+
+    #[Route(
+        '/api/{version}/newsletter/confirm',
+        name: 'api_newsletter_confirm',
+        requirements: ['_format' => 'json', 'version' => 'v1'],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_GET],
+    )]
+    public function confirm(
+        Request $request,
+        NewsletterService $newsletterService,
+    ): JsonResponse {
+        $token = $request->query->getString('token');
+        if ($token === '') {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_REQUEST, 'Missing confirmation token.', Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $newsletterService->confirm($token);
+        } catch (NewsletterException $exception) {
+            return new JsonExceptionResponse($exception->getErrorType(), $exception->getMessage(), $exception->getStatusCode());
+        }
+
+        return new JsonResponse(['message' => 'Your subscription is confirmed.']);
     }
 
     #[Route(

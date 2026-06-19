@@ -8,12 +8,14 @@ use App\Entity\UserLog;
 use App\Entity\UserLogType;
 use App\Repository\UserLogRepository;
 use App\Repository\UserLogTypeRepository;
+use App\Repository\UserRepository;
 
 class UserLogService
 {
     public function __construct(
         private readonly UserLogRepository $userLogRepository,
         private readonly UserLogTypeRepository $userLogTypeRepository,
+        private readonly UserRepository $userRepository,
     ) {
     }
 
@@ -38,6 +40,12 @@ class UserLogService
         $userLog->setUserAgent($userAgent);
         $userLog->setIpAddress($ipAddress);
         $userLog->setContext($context === [] ? null : $context);
+
+        // Correlate to a stable user id (resolved from the email at log time, so it
+        // survives a later email change) for the admin activity feed.
+        if (!is_null($username)) {
+            $userLog->setUser($this->userRepository->findOneByEmail($username));
+        }
 
         $this->userLogRepository->save($userLog, true);
 
