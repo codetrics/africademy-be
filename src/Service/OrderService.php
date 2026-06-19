@@ -20,6 +20,7 @@ use App\Repository\CourseRepository;
 use App\Repository\OrderRepository;
 use App\Repository\RefundRequestRepository;
 use DateTime;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Exception;
@@ -227,8 +228,9 @@ class OrderService
             return false;
         }
 
-        $expectedAmount = $this->payFastService->formatAmount($order->getAmount()->getAmountCents());
-        if ((float) ($data['amount_gross'] ?? 0) !== (float) $expectedAmount) {
+        // Compare in integer cents — never float-equality on money.
+        $paidCents = (int) round(((float) ($data['amount_gross'] ?? 0)) * 100);
+        if ($paidCents !== $order->getAmount()->getAmountCents()) {
             return false;
         }
 
@@ -236,15 +238,23 @@ class OrderService
             return true;
         }
 
-        $this->completeOrder($order, $data['pf_payment_id'] ?? null);
-
-        return true;
+        return $this->completeOrder($order, $data['pf_payment_id'] ?? null);
     }
 
-    private function completeOrder(Order $order, ?string $pfPaymentId): void
+    private function completeOrder(Order $order, ?string $pfPaymentId): bool
     {
         $this->entityManager->beginTransaction();
         try {
+            // Lock the order row so concurrent/duplicate ITNs serialise, then
+            // re-check state under the lock — the authoritative idempotency gate.
+            $order = $this->entityManager->find(Order::class, $order->getId(), LockMode::PESSIMISTIC_WRITE);
+
+            if (!$order instanceof Order || $order->isPaid()) {
+                $this->entityManager->commit();
+
+                return true;
+            }
+
             $order->setStatus(OrderStatus::Paid);
             $order->setPaidAt(new DateTime());
             $order->setPfPaymentId($pfPaymentId);
@@ -272,6 +282,8 @@ class OrderService
             $order->getUser()->getEmail(),
             context: ['order' => (string) $order->getPublicId()],
         );
+
+        return true;
     }
 
     /**

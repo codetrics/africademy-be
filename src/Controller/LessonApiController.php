@@ -25,6 +25,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -321,6 +322,12 @@ final class LessonApiController extends AbstractController
 
         $file = $request->files->get('video');
         if (!$file instanceof UploadedFile) {
+            // An over-limit upload arrives with an empty $_FILES (PHP discarded the
+            // body); surface that as 413 rather than a misleading "no file".
+            if ($this->exceededPostLimit($request)) {
+                return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'The uploaded video is too large.', Response::HTTP_REQUEST_ENTITY_TOO_LARGE);
+            }
+
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_REQUEST, 'No video file was uploaded.', Response::HTTP_BAD_REQUEST);
         }
 
@@ -432,11 +439,14 @@ final class LessonApiController extends AbstractController
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, $exception->getMessage(), Response::HTTP_NOT_FOUND);
         }
 
-        // Lets Apache (mod_xsendfile) stream the bytes when available; otherwise
-        // Symfony streams it directly. Both honour HTTP Range requests.
-        BinaryFileResponse::trustXSendfileTypeHeader();
+        // Inline so a <video> player streams it (the default is "attachment",
+        // which forces a download). HTTP Range/206 seeking works either way, and
+        // X-Sendfile offload is enabled via SYMFONY_TRUST_X_SENDFILE_TYPE_HEADER
+        // on hosts that have mod_xsendfile.
+        $response = new BinaryFileResponse($absolutePath);
+        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE);
 
-        return new BinaryFileResponse($absolutePath);
+        return $response;
     }
 
     private function narrowUser(): ?User
@@ -444,6 +454,31 @@ final class LessonApiController extends AbstractController
         $user = $this->getUser();
 
         return $user instanceof User ? $user : null;
+    }
+
+    private function exceededPostLimit(Request $request): bool
+    {
+        $contentLength = (int) $request->server->get('CONTENT_LENGTH', 0);
+        $postMax = $this->iniBytes((string) ini_get('post_max_size'));
+
+        return $postMax > 0 && $contentLength > $postMax;
+    }
+
+    private function iniBytes(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return 0;
+        }
+
+        $number = (int) $value;
+
+        return match (strtolower($value[strlen($value) - 1])) {
+            'g' => $number * 1024 ** 3,
+            'm' => $number * 1024 ** 2,
+            'k' => $number * 1024,
+            default => $number,
+        };
     }
 
     private function resolveVisibleCourse(string $courseId, User $user, CourseRepository $courseRepository): ?Course

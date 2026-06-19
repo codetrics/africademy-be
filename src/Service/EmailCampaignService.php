@@ -13,7 +13,6 @@ use App\Repository\EmailCampaignRepository;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
-use Exception;
 use Symfony\Component\Uid\Ulid;
 
 class EmailCampaignService
@@ -73,31 +72,30 @@ class EmailCampaignService
         }
 
         $recipients = $this->resolveRecipients($campaign->getSegment());
+        $sentAt = new DateTime();
 
-        $this->entityManager->beginTransaction();
-        try {
-            foreach ($recipients as $email) {
-                $this->notificationService->createEmailNotification(
-                    [$email],
-                    $campaign->getSubject(),
-                    self::CAMPAIGN_TEMPLATE,
-                    [
-                        'heading' => $campaign->getHeading(),
-                        'body' => $campaign->getBody(),
-                    ],
-                );
-            }
-
-            $campaign->setRecipientCount(count($recipients));
-            $campaign->setStatus(EmailCampaignStatus::Sent);
-            $campaign->setSentAt(new DateTime());
-            $this->emailCampaignRepository->save($campaign, true);
-
-            $this->entityManager->commit();
-        } catch (Exception $exception) {
-            $this->entityManager->rollback();
-            throw $exception;
+        // Atomically claim the campaign (draft -> sent) so a concurrent/retried
+        // send can't fan out the segment twice. Only the request that flips the
+        // row queues the emails.
+        if (!$this->emailCampaignRepository->markSentIfDraft($campaign, count($recipients), $sentAt)) {
+            throw EmailCampaignException::alreadySent();
         }
+
+        foreach ($recipients as $email) {
+            $this->notificationService->createEmailNotification(
+                [$email],
+                $campaign->getSubject(),
+                self::CAMPAIGN_TEMPLATE,
+                [
+                    'heading' => $campaign->getHeading(),
+                    'body' => $campaign->getBody(),
+                ],
+            );
+        }
+
+        $campaign->setRecipientCount(count($recipients));
+        $campaign->setStatus(EmailCampaignStatus::Sent);
+        $campaign->setSentAt($sentAt);
 
         return $campaign;
     }

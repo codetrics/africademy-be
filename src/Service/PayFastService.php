@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Entity\Order;
 use App\Entity\User;
 use DateTime;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Throwable;
@@ -37,6 +38,7 @@ class PayFastService
         #[Autowire('%app.payfast.cancel_url%')] private readonly string $cancelUrl,
         #[Autowire('%app.payfast.notify_url%')] private readonly string $notifyUrl,
         private readonly HttpClientInterface $httpClient,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -227,7 +229,12 @@ class PayFastService
                 'headers' => $headers,
                 'body' => $body,
             ])->toArray(false);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $this->logger->error('PayFast API request failed', [
+                'path' => $path,
+                'error' => $exception->getMessage(),
+            ]);
+
             return [];
         }
     }

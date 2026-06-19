@@ -67,6 +67,10 @@ RUN printf '%s\n' \
         '</LocationMatch>' \
     >> /etc/apache2/apache2.conf
 
+# mod_xsendfile is enabled above, so let Symfony emit the X-Sendfile header and
+# have Apache stream the bytes (BinaryFileResponse) instead of PHP.
+ENV SYMFONY_TRUST_X_SENDFILE_TYPE_HEADER=1
+
 RUN printf '%s\n' \
         'date.timezone = Africa/Johannesburg' \
         'memory_limit = 512M' \

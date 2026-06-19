@@ -90,8 +90,7 @@ class CouponService
         $redemption->setAmountDiscountedCents($amountDiscountedCents);
         $this->couponRedemptionRepository->save($redemption);
 
-        $coupon->incrementRedemptionCount();
-        $this->couponRepository->save($coupon);
+        $this->couponRepository->incrementRedemptionCount($coupon);
 
         $this->userLogService->log(
             UserLogType::COUPON_REDEEMED,

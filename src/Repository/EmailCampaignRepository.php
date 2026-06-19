@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Entity\EmailCampaign;
+use App\Enum\EmailCampaignStatus;
+use DateTime;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -52,5 +54,28 @@ class EmailCampaignRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('campaign')
             ->orderBy('campaign.createdAt', 'DESC');
+    }
+
+    /**
+     * Atomically flips a draft campaign to sent. Returns true only for the caller
+     * that won the transition, so the segment is fanned out exactly once.
+     */
+    public function markSentIfDraft(EmailCampaign $campaign, int $recipientCount, DateTime $sentAt): bool
+    {
+        $affected = $this->createQueryBuilder('campaign')
+            ->update()
+            ->set('campaign.status', ':sent')
+            ->set('campaign.recipientCount', ':count')
+            ->set('campaign.sentAt', ':sentAt')
+            ->where('campaign.id = :id AND campaign.status = :draft')
+            ->setParameter('sent', EmailCampaignStatus::Sent)
+            ->setParameter('draft', EmailCampaignStatus::Draft)
+            ->setParameter('count', $recipientCount)
+            ->setParameter('sentAt', $sentAt)
+            ->setParameter('id', $campaign->getId())
+            ->getQuery()
+            ->execute();
+
+        return $affected > 0;
     }
 }

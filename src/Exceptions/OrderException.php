@@ -85,4 +85,9 @@ class OrderException extends Exception
     {
         return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'This refund request has already been resolved.');
     }
+
+    public static function refundGatewayFailed(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_INTERNAL_SERVER_ERROR, Response::HTTP_BAD_GATEWAY, 'The payment gateway refund could not be completed. No changes were made; please retry.');
+    }
 }

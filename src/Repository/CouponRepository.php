@@ -57,4 +57,19 @@ class CouponRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('coupon')->orderBy('coupon.createdAt', 'DESC');
     }
+
+    /**
+     * Atomically bumps the redemption count so concurrent redemptions can't lose
+     * an increment (read-modify-write would).
+     */
+    public function incrementRedemptionCount(Coupon $coupon): void
+    {
+        $this->createQueryBuilder('coupon')
+            ->update()
+            ->set('coupon.redemptionCount', 'coupon.redemptionCount + 1')
+            ->where('coupon.id = :id')
+            ->setParameter('id', $coupon->getId())
+            ->getQuery()
+            ->execute();
+    }
 }

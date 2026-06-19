@@ -14,6 +14,7 @@ use App\Repository\EntitlementRepository;
 use App\Repository\OrderRepository;
 use App\Repository\RefundRequestRepository;
 use DateTime;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Exception;
@@ -61,10 +62,28 @@ class RefundService
     {
         $this->assertPending($refundRequest);
 
-        $order = $refundRequest->getOrder();
-
         $this->entityManager->beginTransaction();
         try {
+            // Lock the request to serialise concurrent approvals and re-check it
+            // is still pending under the lock — guards double-refund.
+            $refundRequest = $this->entityManager->find(RefundRequest::class, $refundRequest->getId(), LockMode::PESSIMISTIC_WRITE);
+            if (!$refundRequest instanceof RefundRequest || $refundRequest->getStatus() !== RefundStatus::Pending) {
+                $this->entityManager->commit();
+                throw OrderException::refundNotActionable();
+            }
+
+            $order = $refundRequest->getOrder();
+
+            // Issue the gateway refund first; only revoke access once the money is
+            // actually returned. A failure leaves everything pending and retriable.
+            if (!is_null($order->getPfPaymentId())) {
+                $result = $this->payFastService->refund($order->getPfPaymentId(), $order->getAmount()->getAmountCents());
+                if (($result['status'] ?? '') !== 'success') {
+                    $this->entityManager->rollback();
+                    throw OrderException::refundGatewayFailed();
+                }
+            }
+
             foreach ($order->getPurchasedCourses() as $course) {
                 $entitlement = $this->entitlementRepository->findOneByUserAndCourse($order->getUser(), $course);
                 if ($entitlement instanceof Entitlement) {
@@ -82,14 +101,14 @@ class RefundService
 
             $this->entityManager->flush();
             $this->entityManager->commit();
+        } catch (OrderException $exception) {
+            throw $exception;
         } catch (Exception $exception) {
             $this->entityManager->rollback();
             throw $exception;
         }
 
-        if (!is_null($order->getPfPaymentId())) {
-            $this->payFastService->refund($order->getPfPaymentId(), $order->getAmount()->getAmountCents());
-        }
+        $order = $refundRequest->getOrder();
 
         $this->userLogService->log(
             UserLogType::REFUND_APPROVED,
