@@ -1597,6 +1597,293 @@ paths:
                 '204': { description: Comment deleted }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts:
+        get:
+            tags: [Blog]
+            summary: List published blog posts (paginated)
+            description: Public endpoint. Featured posts first, then newest. Filter by category slug.
+            security: []
+            parameters:
+                - { name: category, in: query, schema: { type: string }, description: Filter by category slug }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 9 } }
+            responses:
+                '200':
+                    description: The blog feed
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    posts:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/BlogPost' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+        post:
+            tags: [Blog]
+            summary: Create a blog post (draft)
+            description: Requires ROLE_TEACHER. The post starts as a draft; read time is computed from the body.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [category_id, title, excerpt, body]
+                            properties:
+                                category_id: { type: string, description: BlogCategory ULID }
+                                title: { type: string, minLength: 3, maxLength: 255 }
+                                excerpt: { type: string, maxLength: 500 }
+                                body: { type: string }
+            responses:
+                '201':
+                    description: Created draft post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/categories:
+        get:
+            tags: [Blog]
+            summary: List blog categories
+            description: Public endpoint.
+            security: []
+            responses:
+                '200':
+                    description: Blog categories
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    categories:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/BlogCategory' }
+    /blog/posts/{slug}:
+        parameters:
+            - { name: slug, in: path, required: true, schema: { type: string }, description: Blog post slug }
+        get:
+            tags: [Blog]
+            summary: Get a published blog post by slug
+            description: Public endpoint. Only published posts are returned.
+            security: []
+            responses:
+                '200':
+                    description: The post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        patch:
+            tags: [Blog]
+            summary: Update a blog post
+            description: Author or admin only. Recomputes read time when the body changes.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                category_id: { type: string }
+                                title: { type: string, minLength: 3, maxLength: 255 }
+                                excerpt: { type: string, maxLength: 500 }
+                                body: { type: string }
+                                is_featured: { type: boolean }
+            responses:
+                '200':
+                    description: Updated post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Blog]
+            summary: Delete a blog post
+            description: Author or admin only.
+            responses:
+                '204': { description: Post deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}/publish:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        post:
+            tags: [Blog]
+            summary: Publish a blog post
+            description: Author or admin only. Sets publishedAt on first publish.
+            responses:
+                '200':
+                    description: Published post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}/unpublish:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        post:
+            tags: [Blog]
+            summary: Unpublish a blog post (back to draft)
+            description: Author or admin only.
+            responses:
+                '200':
+                    description: Drafted post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /blog/posts/{id}/cover:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
+        get:
+            tags: [Blog]
+            summary: Stream a post's cover image
+            description: Public endpoint.
+            security: []
+            responses:
+                '200': { description: The image binary, content: { image/*: { schema: { type: string, format: binary } } } }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Blog]
+            summary: Upload a post cover image
+            description: Author or admin only. Accepts JPEG, PNG or WebP up to 4MB. Replaces any existing cover.
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [cover]
+                            properties:
+                                cover: { type: string, format: binary }
+            responses:
+                '200':
+                    description: Post with stored cover
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/BlogPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/blog/categories:
+        post:
+            tags: [Blog]
+            summary: Create a blog category (admin)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [name]
+                            properties:
+                                name: { type: string, minLength: 2, maxLength: 100 }
+            responses:
+                '201':
+                    description: Created category
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    category: { $ref: '#/components/schemas/BlogCategory' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/blog/categories/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: BlogCategory ULID }
+        patch:
+            tags: [Blog]
+            summary: Rename a blog category (admin)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [name]
+                            properties:
+                                name: { type: string, minLength: 2, maxLength: 100 }
+            responses:
+                '200':
+                    description: Updated category
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    category: { $ref: '#/components/schemas/BlogCategory' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Blog]
+            summary: Delete a blog category (admin)
+            description: Fails with 409 if the category still has posts.
+            responses:
+                '204': { description: Category deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
+    /newsletter/subscribe:
+        post:
+            tags: [Newsletter]
+            summary: Subscribe to the newsletter
+            description: Public, rate-limited endpoint. Queues a welcome email.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [email]
+                            properties:
+                                email: { type: string, format: email }
+            responses:
+                '201': { description: Subscribed }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /newsletter/unsubscribe:
+        get:
+            tags: [Newsletter]
+            summary: Unsubscribe via token
+            description: Public endpoint. The token is delivered in the welcome email's unsubscribe link.
+            security: []
+            parameters:
+                - { name: token, in: query, required: true, schema: { type: string } }
+            responses:
+                '200': { description: Unsubscribed }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
 components:
     securitySchemes:
         bearerAuth:
@@ -1749,6 +2036,31 @@ components:
                 id: { type: string, description: ULID public identifier }
                 author: { type: string, description: Display name of the author }
                 body: { type: string }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        BlogCategory:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                name: { type: string }
+                slug: { type: string }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        BlogPost:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                slug: { type: string }
+                category: { $ref: '#/components/schemas/BlogCategory' }
+                author: { type: string, description: Display name of the author }
+                title: { type: string }
+                excerpt: { type: string }
+                body: { type: string }
+                cover_image: { type: string, nullable: true, description: 'Absolute URL to the cover stream endpoint, or null' }
+                read_time_minutes: { type: integer, description: Estimated reading time in minutes }
+                is_featured: { type: boolean }
+                status: { type: string, enum: [draft, published] }
+                published_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         Certificate:
