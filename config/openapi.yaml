@@ -1369,6 +1369,234 @@ paths:
                                         items: { $ref: '#/components/schemas/LearnLesson' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts:
+        get:
+            tags: [Community]
+            summary: List community posts (paginated)
+            description: Published posts only, newest first. Filter by tag and free-text search.
+            parameters:
+                - { name: tag, in: query, schema: { type: string, enum: [resource, question, showcase, mentorship] }, description: Filter by tag }
+                - { name: q, in: query, schema: { type: string }, description: Free-text search across title and body }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: The community feed
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    posts:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/CommunityPost' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        post:
+            tags: [Community]
+            summary: Create a community post
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [tag, title, body]
+                            properties:
+                                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                                title: { type: string, minLength: 3, maxLength: 200 }
+                                body: { type: string, maxLength: 10000 }
+                                link_url: { type: string, nullable: true, description: Optional related link }
+            responses:
+                '201':
+                    description: Created post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /community/trending:
+        get:
+            tags: [Community]
+            summary: Trending topics
+            description: Post counts grouped by tag across published posts, busiest first.
+            responses:
+                '200':
+                    description: Trending topics
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    topics:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                                                count: { type: integer }
+    /community/posts/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        get:
+            tags: [Community]
+            summary: Get a community post
+            responses:
+                '200':
+                    description: The post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        patch:
+            tags: [Community]
+            summary: Update a community post
+            description: Only the author or an admin may update the post.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                                title: { type: string, minLength: 3, maxLength: 200 }
+                                body: { type: string, maxLength: 10000 }
+                                link_url: { type: string, nullable: true }
+            responses:
+                '200':
+                    description: Updated post
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+        delete:
+            tags: [Community]
+            summary: Delete a community post
+            description: Only the author or an admin may delete the post.
+            responses:
+                '204': { description: Post deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/image:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        get:
+            tags: [Community]
+            summary: Stream a post's image
+            responses:
+                '200': { description: The image binary, content: { image/*: { schema: { type: string, format: binary } } } }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Community]
+            summary: Upload a post image
+            description: Only the author or an admin may upload. Accepts JPEG, PNG or WebP up to 4MB. Replaces any existing image.
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [image]
+                            properties:
+                                image: { type: string, format: binary }
+            responses:
+                '200':
+                    description: Post with stored image
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    post: { $ref: '#/components/schemas/CommunityPost' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /community/posts/{id}/like:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        post:
+            tags: [Community]
+            summary: Toggle a like on a post
+            description: Likes the post if not already liked, otherwise removes the like. Returns the resulting state and refreshed count.
+            responses:
+                '200':
+                    description: Like state
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    liked: { type: boolean }
+                                    like_count: { type: integer }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/posts/{id}/comments:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
+        get:
+            tags: [Community]
+            summary: List a post's comments (paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: The post's comments
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    comments:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/CommunityComment' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        post:
+            tags: [Community]
+            summary: Comment on a post
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [body]
+                            properties:
+                                body: { type: string, maxLength: 2000 }
+            responses:
+                '201':
+                    description: Created comment
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    comment: { $ref: '#/components/schemas/CommunityComment' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /community/comments/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Comment ULID }
+        delete:
+            tags: [Community]
+            summary: Delete a comment
+            description: The comment author, the post author, or an admin may delete it. Refreshes the post's cached comment count.
+            responses:
+                '204': { description: Comment deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
 components:
     securitySchemes:
         bearerAuth:
@@ -1498,6 +1726,29 @@ components:
                 reviewer: { type: string, description: Display name of the student who wrote the review }
                 rating: { type: integer, minimum: 1, maximum: 5 }
                 body: { type: string, nullable: true, description: 'Optional written review (max 2000 chars)' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        CommunityPost:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                author: { type: string, description: Display name of the author }
+                tag: { type: string, enum: [resource, question, showcase, mentorship] }
+                title: { type: string }
+                body: { type: string }
+                image: { type: string, nullable: true, description: 'Absolute URL to the image stream endpoint, or null' }
+                link_url: { type: string, nullable: true }
+                like_count: { type: integer }
+                comment_count: { type: integer }
+                status: { type: string, enum: [published, hidden] }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        CommunityComment:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                author: { type: string, description: Display name of the author }
+                body: { type: string }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         Certificate:
