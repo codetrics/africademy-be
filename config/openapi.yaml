@@ -44,8 +44,8 @@ info:
           auto-increment keys are never exposed.
         - **Timestamps:** all date/time fields are **Unix seconds** (integer).
           Convert in TS with `new Date(value * 1000)`.
-        - **Pagination:** list endpoints accept `page` (default 1) and `limit`, and return a
-          `pagination` object (`current_page`, `items_per_page`, `total_items`, `total_pages`).
+        - **Pagination:** list endpoints accept `page` (default 1) and `limit` (capped at 100),
+          and return a `pagination` object (`current_page`, `items_per_page`, `total_items`, `total_pages`).
         - **Money:** amounts are integer **cents** with an ISO currency (ZAR).
 
         ### Error envelope
@@ -144,8 +144,8 @@ tags:
         and is owner/admin-gated. Blog category management is admin-only.
     - name: Newsletter
       description: >
-        Public, rate-limited newsletter subscription with a one-click token unsubscribe. A welcome email
-        is queued on subscribe.
+        Public, rate-limited newsletter signup with double opt-in (confirm by email) and a one-click
+        token unsubscribe.
     - name: Analytics
       description: >
         Admin dashboard metrics — overview KPIs (users, revenue, MRR, subscriptions, enrollments,
@@ -2090,7 +2090,9 @@ paths:
         post:
             tags: [Newsletter]
             summary: Subscribe to the newsletter
-            description: Public, rate-limited endpoint. Queues a welcome email.
+            description: >-
+                Public, rate-limited endpoint. Starts a double opt-in: a confirmation email is queued and the
+                subscription stays pending until the user confirms via GET /newsletter/confirm.
             security: []
             requestBody:
                 required: true

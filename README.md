@@ -40,9 +40,9 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 - Bundles (teacher-owned course sets) and coupons/discounts.
 
 **Engagement & content**
-- Community hub — posts (tags, image), comments, likes, trending topics.
+- Community hub — posts (tags, image), comments, likes, trending topics, with admin moderation (hide/unhide).
 - Blog with **public (unauthenticated) read access** and teacher/admin authoring.
-- Newsletter — public, rate-limited subscribe + token unsubscribe.
+- Newsletter — public, rate-limited **double opt-in** (confirm-by-email) + token unsubscribe.
 
 **Admin & operations**
 - Analytics dashboard (users, revenue, MRR, subscriptions, enrollments, top courses).
@@ -96,8 +96,9 @@ entry) or expires cancelled ones.
 - **Email:** Symfony Mailer (Twig templates), dispatched via the scheduler.
 - **Payments:** PayFast (HTTP Client for live charge/refund; libsodium token encryption).
 - **PDF:** Spatie Browsershot (system Chromium) for certificates.
-- **Pagination:** KnpPaginatorBundle.
-- **Docs/UI:** Swagger UI (`swagger-ui-dist`) via Twig + Webpack Encore.
+- **Pagination:** KnpPaginatorBundle (`limit` clamped to 100 on every list endpoint).
+- **Docs/UI:** Swagger UI (`swagger-ui-dist`) via Twig + Webpack Encore, gated by HTTP Basic.
+- **Static analysis:** PHPStan (level 5) — `vendor/bin/phpstan analyse`.
 - **Web server / deploy:** Apache (`symfony/apache-pack`, `mod_xsendfile` for video),
   Docker.
 
@@ -199,7 +200,9 @@ curl http://localhost:8000/health        # => {"status":"ok"}
 bin/console debug:router                 # List routes
 bin/console doctrine:migrations:migrate  # Apply migrations
 bin/console app:user:grant-role <email> ROLE_TEACHER   # Grant a role
+bin/console app:docs-user:create <username>            # Provision the Swagger UI login
 bin/console cache:clear
+vendor/bin/phpstan analyse               # Static analysis (level 5)
 ```
 
 ---
