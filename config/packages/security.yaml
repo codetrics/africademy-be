@@ -13,12 +13,23 @@ security:
             entity:
                 class: App\Entity\User
                 property: email
+        docs_user_provider:
+            entity:
+                class: App\Entity\DocsUser
+                property: username
 
     firewalls:
         dev:
             # Ensure dev tools and static assets are always allowed
             pattern: ^/(_profiler|_wdt|assets|build)/
             security: false
+        docs:
+            # Swagger UI + raw spec, gated by HTTP Basic against a dedicated provider
+            pattern: ^/open-api
+            provider: docs_user_provider
+            stateless: true
+            http_basic:
+                realm: "Africademy API Docs"
         api:
             pattern: ^/api
             stateless: true
@@ -39,6 +50,7 @@ security:
 
     # Note: Only the *first* matching rule is applied
     access_control:
+        - { path: ^/open-api, roles: ROLE_DOCS }
         - { path: ^/api/v1/auth, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/certificates/verify, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/blog, methods: [GET], roles: PUBLIC_ACCESS }
