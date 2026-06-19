@@ -52,7 +52,7 @@ final class CommunityApiController extends AbstractController
         }
 
         $queryBuilder = $communityService->feedQueryBuilder($tag, $request->query->getString('q'));
-        $pagination = $paginator->paginate($queryBuilder, $request->query->getInt('page', 1), $request->query->getInt('limit', 10));
+        $pagination = $paginator->paginate($queryBuilder, $request->query->getInt('page', 1), Tools::clampLimit($request->query->getInt('limit', 10)));
 
         $response = new JsonResponse();
         $response->setData([
@@ -114,13 +114,17 @@ final class CommunityApiController extends AbstractController
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'Invalid post tag.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $post = $communityService->createPost(
-            $user,
-            $tag,
-            (string) $data['title'],
-            (string) $data['body'],
-            $this->linkUrl($data),
-        );
+        try {
+            $post = $communityService->createPost(
+                $user,
+                $tag,
+                (string) $data['title'],
+                (string) $data['body'],
+                $this->linkUrl($data),
+            );
+        } catch (CommunityException $exception) {
+            return $this->mapException($exception);
+        }
 
         $response = new JsonResponse();
         $response->setData(['post' => json_decode($serializerService->serialize($post))]);
@@ -143,7 +147,7 @@ final class CommunityApiController extends AbstractController
         SerializerService $serializerService,
     ): JsonResponse {
         try {
-            $post = $communityService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
+            $post = $communityService->resolveVisiblePost(Ulid::fromString($request->attributes->getString('id')), $this->narrowUser());
         } catch (CommunityException $exception) {
             return $this->mapException($exception);
         }
@@ -192,7 +196,11 @@ final class CommunityApiController extends AbstractController
         $body = array_key_exists('body', $data) ? (string) $data['body'] : $post->getBody();
         $linkUrl = array_key_exists('link_url', $data) ? $this->linkUrl($data) : $post->getLinkUrl();
 
-        $communityService->updatePost($post, $tag, $title, $body, $linkUrl);
+        try {
+            $communityService->updatePost($post, $tag, $title, $body, $linkUrl);
+        } catch (CommunityException $exception) {
+            return $this->mapException($exception);
+        }
 
         $response = new JsonResponse();
         $response->setData(['post' => json_decode($serializerService->serialize($post))]);
@@ -277,7 +285,7 @@ final class CommunityApiController extends AbstractController
         CommunityImageUploadService $communityImageUploadService,
     ): Response {
         try {
-            $post = $communityService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
+            $post = $communityService->resolveVisiblePost(Ulid::fromString($request->attributes->getString('id')), $this->narrowUser());
         } catch (CommunityException $exception) {
             return $this->mapException($exception);
         }
@@ -314,7 +322,7 @@ final class CommunityApiController extends AbstractController
         }
 
         try {
-            $post = $communityService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
+            $post = $communityService->resolveVisiblePost(Ulid::fromString($request->attributes->getString('id')), $this->narrowUser());
         } catch (CommunityException $exception) {
             return $this->mapException($exception);
         }
@@ -340,7 +348,7 @@ final class CommunityApiController extends AbstractController
         SerializerService $serializerService,
     ): JsonResponse {
         try {
-            $post = $communityService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
+            $post = $communityService->resolveVisiblePost(Ulid::fromString($request->attributes->getString('id')), $this->narrowUser());
         } catch (CommunityException $exception) {
             return $this->mapException($exception);
         }
@@ -348,7 +356,7 @@ final class CommunityApiController extends AbstractController
         $pagination = $paginator->paginate(
             $communityService->postCommentsQueryBuilder($post),
             $request->query->getInt('page', 1),
-            $request->query->getInt('limit', 20),
+            Tools::clampLimit($request->query->getInt('limit', 20)),
         );
 
         $response = new JsonResponse();
@@ -379,7 +387,7 @@ final class CommunityApiController extends AbstractController
         }
 
         try {
-            $post = $communityService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
+            $post = $communityService->resolveVisiblePost(Ulid::fromString($request->attributes->getString('id')), $this->narrowUser());
         } catch (CommunityException $exception) {
             return $this->mapException($exception);
         }
@@ -395,7 +403,11 @@ final class CommunityApiController extends AbstractController
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_REQUEST, $exception->getMessage(), Response::HTTP_BAD_REQUEST);
         }
 
-        $comment = $communityService->addComment($user, $post, (string) $data['body']);
+        try {
+            $comment = $communityService->addComment($user, $post, (string) $data['body']);
+        } catch (CommunityException $exception) {
+            return $this->mapException($exception);
+        }
 
         $response = new JsonResponse();
         $response->setData(['comment' => json_decode($serializerService->serialize($comment))]);
@@ -443,7 +455,7 @@ final class CommunityApiController extends AbstractController
     private function decode(Request $request): array|JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_JSON, 'Invalid JSON payload', Response::HTTP_BAD_REQUEST);
         }
 

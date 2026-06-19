@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\Helper\Tools;
 use App\Enum\UserStatus;
 use App\Exceptions\JsonExceptionResponse;
 use App\Service\AdminDirectoryService;
@@ -46,7 +47,7 @@ final class AdminStudentApiController extends AbstractController
         $pagination = $paginator->paginate(
             $adminDirectoryService->studentsQueryBuilder($request->query->getString('q'), $status),
             $request->query->getInt('page', 1),
-            $request->query->getInt('limit', 20),
+            Tools::clampLimit($request->query->getInt('limit', 20)),
         );
 
         $response = new JsonResponse();

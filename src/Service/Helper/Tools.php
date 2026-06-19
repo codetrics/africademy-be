@@ -8,6 +8,17 @@ use Exception;
 
 class Tools
 {
+    public const int MAX_PAGE_LIMIT = 100;
+
+    /**
+     * Clamps a client-supplied page size into [1, MAX_PAGE_LIMIT] so an oversized
+     * `limit` cannot force the database/serializer to materialise a whole table.
+     */
+    public static function clampLimit(int $limit): int
+    {
+        return min(max($limit, 1), self::MAX_PAGE_LIMIT);
+    }
+
     /**
      * @param string[] $expectedKeys
      * @param array<string, mixed> $data

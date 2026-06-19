@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Enum\BlogPostStatus;
 use App\Exceptions\BlogException;
 use App\Exceptions\JsonExceptionResponse;
 use App\Security\Voter\BlogPostVoter;
@@ -58,7 +59,7 @@ final class BlogApiController extends AbstractController
         $pagination = $paginator->paginate(
             $blogService->publishedQueryBuilder($category),
             $request->query->getInt('page', 1),
-            $request->query->getInt('limit', 9),
+            Tools::clampLimit($request->query->getInt('limit', 9)),
         );
 
         $response = new JsonResponse();
@@ -127,6 +128,11 @@ final class BlogApiController extends AbstractController
             $post = $blogService->resolvePost(Ulid::fromString($request->attributes->getString('id')));
         } catch (BlogException $exception) {
             return $this->mapException($exception);
+        }
+
+        // This endpoint is public; never serve covers of unpublished (draft) posts.
+        if ($post->getStatus() !== BlogPostStatus::Published) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Blog post not found.', Response::HTTP_NOT_FOUND);
         }
 
         $coverPath = $post->getCoverImagePath();
@@ -367,7 +373,7 @@ final class BlogApiController extends AbstractController
     private function decode(Request $request): array|JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_JSON, 'Invalid JSON payload', Response::HTTP_BAD_REQUEST);
         }
 

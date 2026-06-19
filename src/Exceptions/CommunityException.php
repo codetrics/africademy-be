@@ -41,4 +41,9 @@ class CommunityException extends Exception
     {
         return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid post tag.');
     }
+
+    public static function validation(string $message): self
+    {
+        return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, $message);
+    }
 }

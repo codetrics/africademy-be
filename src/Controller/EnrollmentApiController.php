@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\Enrollment;
+use App\Service\Helper\Tools;
 use App\Entity\User;
 use App\Exceptions\EnrollmentException;
 use App\Exceptions\JsonExceptionResponse;
@@ -79,7 +80,7 @@ final class EnrollmentApiController extends AbstractController
         $pagination = $paginator->paginate(
             $enrollmentService->createStudentEnrollmentsQueryBuilder($user),
             $request->query->getInt('page', 1),
-            $request->query->getInt('limit', 10),
+            Tools::clampLimit($request->query->getInt('limit', 10)),
         );
 
         $enrollments = [];

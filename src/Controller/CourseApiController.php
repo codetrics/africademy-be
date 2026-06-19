@@ -57,7 +57,7 @@ final class CourseApiController extends AbstractController
         }
 
         $page = $request->query->getInt('page', 1);
-        $limit = $request->query->getInt('limit', 10);
+        $limit = Tools::clampLimit($request->query->getInt('limit', 10));
         $categorySlug = $request->query->getString('category');
         $levelValue = $request->query->getString('level');
         $search = $request->query->getString('q');
@@ -113,7 +113,7 @@ final class CourseApiController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_INVALID_JSON,
                 'Invalid JSON payload',
@@ -242,7 +242,7 @@ final class CourseApiController extends AbstractController
         $this->denyAccessUnlessGranted(CourseVoter::EDIT, $course);
 
         $data = json_decode($request->getContent(), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_INVALID_JSON,
                 'Invalid JSON payload',

@@ -96,7 +96,7 @@ final class LessonApiController extends AbstractController
         $this->denyAccessUnlessGranted(CourseVoter::EDIT, $course);
 
         $data = json_decode($request->getContent(), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_INVALID_JSON,
                 'Invalid JSON payload',
@@ -216,7 +216,7 @@ final class LessonApiController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_INVALID_JSON,
                 'Invalid JSON payload',

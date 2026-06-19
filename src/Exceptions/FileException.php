@@ -5,26 +5,45 @@ declare(strict_types=1);
 namespace App\Exceptions;
 
 use Exception;
+use Symfony\Component\HttpFoundation\Response;
 
 class FileException extends Exception
 {
-    public static function invalidUploadedFile(): FileException
-    {
-        return new static('Invalid uploaded file.');
+    private function __construct(
+        private readonly string $errorType,
+        private readonly int $statusCode,
+        string $message,
+    ) {
+        parent::__construct($message);
     }
 
-    public static function fileExceedsMaxSize(int $maxFileSize): FileException
+    public function getErrorType(): string
     {
-        return new static(sprintf('File exceeds max size of %d bytes.', $maxFileSize));
+        return $this->errorType;
     }
 
-    public static function invalidFileMimeType(string $mimeType): FileException
+    public function getStatusCode(): int
     {
-        return new static('Invalid file mime type: ' . $mimeType);
+        return $this->statusCode;
     }
 
-    public static function fileNotFound(string $relativePath): FileException
+    public static function invalidUploadedFile(): self
     {
-        return new static('File not found: ' . $relativePath);
+        return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid uploaded file.');
+    }
+
+    public static function fileExceedsMaxSize(int $maxFileSize): self
+    {
+        return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, sprintf('File exceeds max size of %d bytes.', $maxFileSize));
+    }
+
+    public static function invalidFileMimeType(string $mimeType): self
+    {
+        return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid file mime type: ' . $mimeType);
+    }
+
+    public static function fileNotFound(string $relativePath): self
+    {
+        return new self(JsonExceptionResponse::ERROR_NOT_FOUND, Response::HTTP_NOT_FOUND, 'File not found: ' . $relativePath);
     }
 }

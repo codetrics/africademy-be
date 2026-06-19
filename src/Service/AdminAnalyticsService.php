@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\Course;
 use App\Enum\CourseStatus;
+use App\Enum\SubscriptionStatus;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -46,12 +47,14 @@ class AdminAnalyticsService
             "SELECT COALESCE(SUM(amount_amount_cents), 0) FROM orders WHERE status = 'refunded'",
         )->fetchOne();
 
-        $mrrCents = (int) $connection->executeQuery(
-            "SELECT COALESCE(SUM(CASE WHEN plan.billing_interval = 'annual' THEN ROUND(plan.price_amount_cents / 12) ELSE plan.price_amount_cents END), 0)
+        // Sum exact monthly-equivalent cents (annual / 12 kept as a decimal) and
+        // round once at the end so per-plan rounding can't drift the total.
+        $mrrCents = (int) round((float) $connection->executeQuery(
+            "SELECT COALESCE(SUM(CASE WHEN plan.billing_interval = 'annual' THEN plan.price_amount_cents / 12 ELSE plan.price_amount_cents END), 0)
              FROM subscriptions sub
              INNER JOIN subscription_plans plan ON plan.id = sub.plan_id
              WHERE sub.status = 'active'",
-        )->fetchOne();
+        )->fetchOne());
 
         return [
             'users' => [
@@ -71,7 +74,7 @@ class AdminAnalyticsService
                 'refunded_cents' => $refundedCents,
                 'mrr_cents' => $mrrCents,
             ],
-            'subscriptions' => $this->countsByStatus('subscriptions'),
+            'subscriptions' => $this->countsByStatus('subscriptions', SubscriptionStatus::cases()),
             'enrollments' => [
                 'total' => (int) $connection->executeQuery('SELECT COUNT(*) FROM enrollments')->fetchOne(),
                 'completed' => (int) $connection->executeQuery(
@@ -174,15 +177,22 @@ class AdminAnalyticsService
     }
 
     /**
+     * @param \BackedEnum[] $seedCases status cases pre-seeded to 0 so the result is
+     *                                 always a populated keyed object (never an empty array)
+     *
      * @return array<string, int>
      */
-    private function countsByStatus(string $table): array
+    private function countsByStatus(string $table, array $seedCases = []): array
     {
+        $counts = [];
+        foreach ($seedCases as $case) {
+            $counts[(string) $case->value] = 0;
+        }
+
         $rows = $this->entityManager->getConnection()->executeQuery(
             sprintf('SELECT status, COUNT(*) AS total FROM %s GROUP BY status', $table),
         )->fetchAllAssociative();
 
-        $counts = [];
         foreach ($rows as $row) {
             $counts[(string) $row['status']] = (int) $row['total'];
         }

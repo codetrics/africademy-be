@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Service\AdminDirectoryService;
+use App\Service\Helper\Tools;
 use App\Service\ReturnType\PaginationReturnType;
 use App\Service\SerializerService;
 use DateTime;
@@ -44,7 +45,7 @@ final class AdminActivityApiController extends AbstractController
                 $to,
             ),
             $request->query->getInt('page', 1),
-            $request->query->getInt('limit', 25),
+            Tools::clampLimit($request->query->getInt('limit', 25)),
         );
 
         $response = new JsonResponse();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Exceptions\JsonExceptionResponse;
+use App\Service\Helper\Tools;
 use App\Exceptions\OrderException;
 use App\Service\RefundService;
 use App\Service\ReturnType\PaginationReturnType;
@@ -37,7 +38,7 @@ final class AdminRefundApiController extends AbstractController
         $pagination = $paginator->paginate(
             $refundService->createPendingQueryBuilder(),
             $request->query->getInt('page', 1),
-            $request->query->getInt('limit', 10),
+            Tools::clampLimit($request->query->getInt('limit', 10)),
         );
 
         $response = new JsonResponse();

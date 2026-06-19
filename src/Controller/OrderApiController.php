@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\Helper\Tools;
 use App\Entity\UserLogType;
 use App\Exceptions\CouponException;
 use App\Exceptions\JsonExceptionResponse;
@@ -138,7 +139,7 @@ final class OrderApiController extends AbstractController
         $pagination = $paginator->paginate(
             $orderService->createUserOrdersQueryBuilder($user),
             $request->query->getInt('page', 1),
-            $request->query->getInt('limit', 10),
+            Tools::clampLimit($request->query->getInt('limit', 10)),
         );
 
         $response = new JsonResponse();

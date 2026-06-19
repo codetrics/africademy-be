@@ -1,4 +1,6 @@
 {
+    "name": "africademy/africademy-be",
+    "description": "Africademy backend API — a Symfony JSON API for the Africademy learning platform.",
     "type": "project",
     "license": "proprietary",
     "minimum-stability": "stable",

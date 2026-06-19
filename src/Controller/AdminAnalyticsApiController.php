@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Exceptions\JsonExceptionResponse;
 use App\Service\AdminAnalyticsService;
 use App\Service\SerializerService;
 use DateTime;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -44,7 +46,11 @@ final class AdminAnalyticsApiController extends AbstractController
         AdminAnalyticsService $adminAnalyticsService,
     ): JsonResponse {
         $interval = $this->interval($request);
-        [$from, $to] = $this->range($request);
+        $range = $this->range($request);
+        if ($range instanceof JsonResponse) {
+            return $range;
+        }
+        [$from, $to] = $range;
 
         return new JsonResponse([
             'interval' => $interval,
@@ -67,7 +73,11 @@ final class AdminAnalyticsApiController extends AbstractController
         AdminAnalyticsService $adminAnalyticsService,
     ): JsonResponse {
         $interval = $this->interval($request);
-        [$from, $to] = $this->range($request);
+        $range = $this->range($request);
+        if ($range instanceof JsonResponse) {
+            return $range;
+        }
+        [$from, $to] = $range;
 
         return new JsonResponse([
             'interval' => $interval,
@@ -108,26 +118,44 @@ final class AdminAnalyticsApiController extends AbstractController
     }
 
     /**
-     * Resolves the from/to window from query params, defaulting to the last 30 days.
+     * Resolves the from/to window from query params, defaulting to the last 30
+     * days. Bounds are snapped to start/end of day so the whole `to` day is
+     * included regardless of request time. Returns a 422 response if a date is
+     * malformed or the range is inverted.
      *
-     * @return array{0: DateTime, 1: DateTime}
+     * @return array{0: DateTime, 1: DateTime}|JsonResponse
      */
-    private function range(Request $request): array
+    private function range(Request $request): array|JsonResponse
     {
-        $to = $this->parseDate($request->query->getString('to')) ?? new DateTime();
-        $from = $this->parseDate($request->query->getString('from')) ?? new DateTime()->modify('-30 days');
+        $fromValue = $request->query->getString('from');
+        $toValue = $request->query->getString('to');
+
+        $from = $fromValue === '' ? new DateTime()->modify('-30 days') : $this->parseDate($fromValue);
+        $to = $toValue === '' ? new DateTime() : $this->parseDate($toValue);
+
+        if (!$from instanceof DateTime || !$to instanceof DateTime) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'Dates must be valid and formatted as YYYY-MM-DD.', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $from->setTime(0, 0, 0);
+        $to->setTime(23, 59, 59);
+
+        if ($from > $to) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'The "from" date must not be after the "to" date.', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         return [$from, $to];
     }
 
     private function parseDate(string $value): ?DateTime
     {
-        if ($value === '') {
+        $date = DateTime::createFromFormat('!Y-m-d', $value);
+        $errors = DateTime::getLastErrors();
+
+        if (!$date instanceof DateTime || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
             return null;
         }
 
-        $date = DateTime::createFromFormat('Y-m-d', $value);
-
-        return $date instanceof DateTime ? $date : null;
+        return $date;
     }
 }

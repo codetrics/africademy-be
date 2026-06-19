@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\Course;
+use App\Service\Helper\Tools;
 use App\Entity\User;
 use App\Exceptions\JsonExceptionResponse;
 use App\Exceptions\QuizException;
@@ -153,7 +154,7 @@ final class QuizApiController extends AbstractController
             return $this->mapException($exception);
         }
 
-        $pagination = $paginator->paginate($queryBuilder, $request->query->getInt('page', 1), $request->query->getInt('limit', 10));
+        $pagination = $paginator->paginate($queryBuilder, $request->query->getInt('page', 1), Tools::clampLimit($request->query->getInt('limit', 10)));
 
         $response = new JsonResponse();
         $response->setData([

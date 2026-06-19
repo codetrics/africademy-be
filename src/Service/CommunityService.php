@@ -14,9 +14,11 @@ use App\Exceptions\CommunityException;
 use App\Repository\CommunityCommentRepository;
 use App\Repository\CommunityPostLikeRepository;
 use App\Repository\CommunityPostRepository;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Uid\Ulid;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class CommunityService
 {
@@ -25,9 +27,13 @@ class CommunityService
         private readonly CommunityCommentRepository $communityCommentRepository,
         private readonly CommunityPostLikeRepository $communityPostLikeRepository,
         private readonly CommunityImageUploadService $communityImageUploadService,
+        private readonly ValidatorInterface $validator,
     ) {
     }
 
+    /**
+     * @throws CommunityException
+     */
     public function createPost(User $author, CommunityPostTag $tag, string $title, string $body, ?string $linkUrl): CommunityPost
     {
         $post = new CommunityPost();
@@ -36,17 +42,22 @@ class CommunityService
         $post->setTitle($title);
         $post->setBody($body);
         $post->setLinkUrl($linkUrl);
+        $this->validate($post);
         $this->communityPostRepository->save($post, true);
 
         return $post;
     }
 
+    /**
+     * @throws CommunityException
+     */
     public function updatePost(CommunityPost $post, CommunityPostTag $tag, string $title, string $body, ?string $linkUrl): CommunityPost
     {
         $post->setTag($tag);
         $post->setTitle($title);
         $post->setBody($body);
         $post->setLinkUrl($linkUrl);
+        $this->validate($post);
         $this->communityPostRepository->save($post, true);
 
         return $post;
@@ -113,6 +124,30 @@ class CommunityService
     }
 
     /**
+     * Resolves a post for a public read/interaction. Hidden (moderated) posts are
+     * only visible to their author or an admin; everyone else gets a not-found.
+     *
+     * @throws CommunityException
+     */
+    public function resolveVisiblePost(Ulid $publicId, ?User $viewer): CommunityPost
+    {
+        $post = $this->resolvePost($publicId);
+
+        if ($post->getStatus() === CommunityPostStatus::Published) {
+            return $post;
+        }
+
+        if (
+            $viewer instanceof User
+            && ($post->getAuthor()->getId() === $viewer->getId() || in_array(User::ROLE_ADMIN, $viewer->getRoles(), true))
+        ) {
+            return $post;
+        }
+
+        throw CommunityException::postNotFound();
+    }
+
+    /**
      * @throws CommunityException
      */
     public function resolveComment(Ulid $publicId): CommunityComment
@@ -126,12 +161,16 @@ class CommunityService
         return $comment;
     }
 
+    /**
+     * @throws CommunityException
+     */
     public function addComment(User $author, CommunityPost $post, string $body): CommunityComment
     {
         $comment = new CommunityComment();
         $comment->setPost($post);
         $comment->setAuthor($author);
         $comment->setBody($body);
+        $this->validate($comment);
         $this->communityCommentRepository->save($comment, true);
 
         $this->recalculateCommentCount($post);
@@ -168,7 +207,16 @@ class CommunityService
             $like = new CommunityPostLike();
             $like->setPost($post);
             $like->setUser($user);
-            $this->communityPostLikeRepository->save($like, true);
+
+            try {
+                $this->communityPostLikeRepository->save($like, true);
+            } catch (UniqueConstraintViolationException) {
+                // A concurrent request from the same user already inserted the like.
+                // The EntityManager is now closed, so return the in-memory count;
+                // the winning request has already persisted the correct value.
+                return ['liked' => true, 'like_count' => $post->getLikeCount()];
+            }
+
             $liked = true;
         }
 
@@ -183,5 +231,17 @@ class CommunityService
     {
         $post->setCommentCount($this->communityCommentRepository->countByPost($post));
         $this->communityPostRepository->save($post, true);
+    }
+
+    /**
+     * @throws CommunityException on the first constraint violation
+     */
+    private function validate(object $entity): void
+    {
+        $violations = $this->validator->validate($entity);
+
+        if (count($violations) > 0) {
+            throw CommunityException::validation((string) $violations[0]->getMessage());
+        }
     }
 }
