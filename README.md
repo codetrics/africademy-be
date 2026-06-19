@@ -113,8 +113,32 @@ entry) or expires cancelled ones.
 - **Health check:** `GET /health` → `{"status":"ok"}`.
 
 All resources are addressed by **ULID** public identifiers; internal auto-increment
-keys are never exposed. Errors use a consistent JSON envelope; security exceptions are
-normalized by a `kernel.exception` subscriber.
+keys are never exposed.
+
+### Error handling
+
+Every error on an `/api` request returns the JSON envelope (never an HTML error
+page) — including 404s and unexpected 500s, normalized by `APIExceptionsSubscriber`:
+
+```json
+{ "error": "not_found", "error_description": "The requested resource was not found." }
+```
+
+| Status | When |
+|---|---|
+| `400` | malformed JSON / missing required fields |
+| `401` | not authenticated — no token, or an expired/invalid token |
+| `403` | authenticated but lacking the required role/ownership |
+| `404` | unknown route or resource |
+| `409` | conflict (e.g. duplicate) |
+| `422` | validation failure |
+| `429` | rate limit exceeded |
+| `500` | unexpected error (logged; generic client message) |
+
+Authentication errors are specific: `JWTExceptionSubscriber` returns distinct
+401 messages for **expired**, **invalid**, and **missing** tokens, and embeds the
+user's ULID `id` in the issued JWT payload. Non-`/api` paths (e.g. the Swagger UI)
+keep Symfony's default handling.
 
 ---
 

@@ -21,6 +21,11 @@ info:
         4. Send `Authorization: Bearer <access_token>` on every authenticated request.
         5. `POST /auth/refresh` — exchange the refresh token for a new access token.
 
+        The issued JWT payload carries the user's ULID as the `id` claim. Token failures
+        return a specific `401`: **expired** ("Token expired."), **invalid** ("Invalid
+        token."), or **missing** ("Authentication required."). A logged-in user without the
+        required role/ownership gets `403`.
+
         Roles are hierarchical: `ROLE_STUDENT` ⊂ `ROLE_TEACHER` ⊂ `ROLE_ADMIN`.
         Students consume content; teachers author courses/lessons/blog posts they own
         (record-level checks via voters); admins manage coupons, refunds, blog
@@ -44,10 +49,13 @@ info:
         - **Money:** amounts are integer **cents** with an ISO currency (ZAR).
 
         ### Error envelope
-        Every error returns `{ "error": "<code>", "error_description": "<message>" }`.
+        **Every** error on an `/api` request returns this JSON shape — never an HTML page,
+        including 404s and unexpected 500s:
+        `{ "error": "<code>", "error_description": "<message>" }`.
         Common codes by status: `400` invalid_json / invalid_request · `401` unauthorized ·
         `403` (access denied) · `404` not_found · `409` conflict ·
-        `422` validation_error · `429` rate_limit_exceeded.
+        `422` validation_error · `429` rate_limit_exceeded ·
+        `500` internal_server_error.
 
         ### Webhooks
         PayFast posts payment notifications (ITN) to `POST /webhooks/payfast/notify`
