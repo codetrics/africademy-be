@@ -47,6 +47,10 @@ info:
         - **Pagination:** list endpoints accept `page` (default 1) and `limit` (capped at 100),
           and return a `pagination` object (`current_page`, `items_per_page`, `total_items`, `total_pages`).
         - **Money:** amounts are integer **cents** with an ISO currency (ZAR).
+        - **Rate limiting:** all anonymous (unauthenticated) requests are capped at **60/minute per IP**;
+          sensitive flows are stricter (registration / email-verification / password-reset / newsletter:
+          **5 per 15 minutes**, login: **5 per 15 minutes**). Community writes (post/comment/like/upload)
+          are capped at **20/minute per user**. Exceeding a limit returns `429 rate_limit_exceeded`.
 
         ### Error envelope
         **Every** error on an `/api` request returns this JSON shape — never an HTML page,
