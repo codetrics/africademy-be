@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         acl \
         ca-certificates \
         default-mysql-client \
+        libapache2-mod-xsendfile \
         chromium \
         fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
@@ -33,7 +34,7 @@ RUN docker-php-ext-install -j"$(nproc)" \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN a2enmod rewrite headers
+RUN a2enmod rewrite headers xsendfile
 
 RUN groupadd -g ${APP_GID} ${APP_USER} \
     && useradd -u ${APP_UID} -g ${APP_USER} -m -d /home/${APP_USER} -s /bin/bash ${APP_USER}
@@ -52,6 +53,19 @@ RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 RUN sed -ri "s!/var/www/html!/home/${APP_USER}/public_html/public!g" /etc/apache2/sites-available/000-default.conf \
     && printf '<Directory /home/%s/public_html/public/>\n    AllowOverride All\n    Require all granted\n</Directory>\n' "${APP_USER}" >> /etc/apache2/apache2.conf
+
+# X-Sendfile lets Apache stream hosted lesson videos; the upload endpoint alone
+# accepts large bodies (up to 10GB) while global php limits stay at the default.
+RUN printf '%s\n' \
+        'XSendFile On' \
+        "XSendFilePath /home/${APP_USER}/public_html/var/storage/lessons" \
+        '<LocationMatch "^/api/v[0-9]+/courses/[^/]+/lessons/[^/]+/video$">' \
+        '    php_value upload_max_filesize 10G' \
+        '    php_value post_max_size 11G' \
+        '    php_value max_input_time 3600' \
+        '    LimitRequestBody 11811160064' \
+        '</LocationMatch>' \
+    >> /etc/apache2/apache2.conf
 
 RUN printf '%s\n' \
         'date.timezone = Africa/Johannesburg' \
