@@ -2094,6 +2094,89 @@ paths:
                                         items: { $ref: '#/components/schemas/UserLog' }
                                     pagination: { $ref: '#/components/schemas/Pagination' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/email-campaigns:
+        get:
+            tags: [Admin]
+            summary: List email campaigns (admin, paginated)
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Campaigns
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaigns:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/EmailCampaign' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+        post:
+            tags: [Admin]
+            summary: Create an email campaign (draft)
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [subject, heading, body, segment]
+                            properties:
+                                subject: { type: string, maxLength: 150 }
+                                heading: { type: string, maxLength: 150 }
+                                body: { type: string }
+                                segment: { type: string, enum: [all_students, active_subscribers, newsletter_subscribers] }
+            responses:
+                '201':
+                    description: Created draft campaign
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaign: { $ref: '#/components/schemas/EmailCampaign' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/email-campaigns/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: EmailCampaign ULID }
+        get:
+            tags: [Admin]
+            summary: Get an email campaign (admin)
+            responses:
+                '200':
+                    description: The campaign
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaign: { $ref: '#/components/schemas/EmailCampaign' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/email-campaigns/{id}/send:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: EmailCampaign ULID }
+        post:
+            tags: [Admin]
+            summary: Send a campaign (admin)
+            description: Queues one email per recipient in the segment via the notification pipeline. Idempotent guard — a sent campaign returns 409.
+            responses:
+                '200':
+                    description: Sent campaign with recipient count
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    campaign: { $ref: '#/components/schemas/EmailCampaign' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
 components:
     securitySchemes:
         bearerAuth:
@@ -2246,6 +2329,19 @@ components:
                 id: { type: string, description: ULID public identifier }
                 author: { type: string, description: Display name of the author }
                 body: { type: string }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        EmailCampaign:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                subject: { type: string }
+                heading: { type: string }
+                body: { type: string }
+                segment: { type: string, enum: [all_students, active_subscribers, newsletter_subscribers] }
+                status: { type: string, enum: [draft, sent] }
+                recipient_count: { type: integer }
+                sent_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         UserLog:
