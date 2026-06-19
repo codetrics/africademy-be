@@ -3,7 +3,7 @@ parameters:
     app.payfast.merchant_id: '%env(default:payfast_merchant_id_default:PAYFAST_MERCHANT_ID)%'
     app.payfast.merchant_key: '%env(default:payfast_merchant_key_default:PAYFAST_MERCHANT_KEY)%'
     app.payfast.passphrase: '%env(default:payfast_passphrase_default:PAYFAST_PASSPHRASE)%'
-    app.payfast.sandbox: true
+    app.payfast.sandbox: '%env(default:payfast_sandbox_default:bool:PAYFAST_SANDBOX)%'
     app.payfast.return_url: '%env(default:payfast_return_url_default:PAYFAST_RETURN_URL)%'
     app.payfast.cancel_url: '%env(default:payfast_cancel_url_default:PAYFAST_CANCEL_URL)%'
     app.payfast.notify_url: '%env(default:payfast_notify_url_default:PAYFAST_NOTIFY_URL)%'
@@ -11,6 +11,7 @@ parameters:
     payfast_merchant_id_default: '10000100'
     payfast_merchant_key_default: '46f0cd694581a'
     payfast_passphrase_default: ''
+    payfast_sandbox_default: true
     payfast_return_url_default: 'https://be-preview.codetrics.co.za/payment/return'
     payfast_cancel_url_default: 'https://be-preview.codetrics.co.za/payment/cancel'
     payfast_notify_url_default: 'https://be-preview.codetrics.co.za/webhooks/payfast/notify'

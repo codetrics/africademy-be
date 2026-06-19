@@ -6,7 +6,10 @@ namespace App\Service;
 
 use App\Entity\Order;
 use App\Entity\User;
+use DateTime;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Throwable;
 
 /**
  * PayFast gateway helper: builds the signed checkout payload for a redirect/form
@@ -19,6 +22,8 @@ class PayFastService
 {
     private const string SANDBOX_PROCESS_URL = 'https://sandbox.payfast.co.za/eng/process';
     private const string LIVE_PROCESS_URL = 'https://www.payfast.co.za/eng/process';
+    private const string API_BASE_URL = 'https://api.payfast.co.za';
+    private const string API_VERSION = 'v1';
     private const int ITEM_NAME_MAX_LENGTH = 100;
     private const int SETUP_AMOUNT_CENTS = 500;
     public const string TOKENIZATION_MARKER = 'pm_setup';
@@ -31,6 +36,7 @@ class PayFastService
         #[Autowire('%app.payfast.return_url%')] private readonly string $returnUrl,
         #[Autowire('%app.payfast.cancel_url%')] private readonly string $cancelUrl,
         #[Autowire('%app.payfast.notify_url%')] private readonly string $notifyUrl,
+        private readonly HttpClientInterface $httpClient,
     ) {
     }
 
@@ -155,8 +161,7 @@ class PayFastService
 
     /**
      * Charges a stored token (adhoc recurring charge). In sandbox this returns a
-     * simulated success; a live charge requires symfony/http-client and is not
-     * enabled in this build.
+     * simulated success; live calls hit the PayFast API.
      *
      * @return array{status: string, pf_payment_id: ?string}
      */
@@ -166,12 +171,22 @@ class PayFastService
             return ['status' => 'success', 'pf_payment_id' => 'SIM-' . bin2hex(random_bytes(6))];
         }
 
-        throw new \RuntimeException('Live PayFast adhoc charging requires symfony/http-client and is not enabled in this build.');
+        $body = [
+            'amount' => (string) $amountCents,
+            'item_name' => substr($itemName, 0, self::ITEM_NAME_MAX_LENGTH),
+        ];
+
+        $response = $this->apiRequest(sprintf('/subscriptions/%s/adhoc', urlencode($token)), $body);
+
+        return [
+            'status' => $this->apiStatus($response),
+            'pf_payment_id' => isset($response['data']['pf_payment_id']) ? (string) $response['data']['pf_payment_id'] : null,
+        ];
     }
 
     /**
-     * Refunds a settled payment. Simulated in sandbox; a live refund requires
-     * symfony/http-client and is not enabled in this build.
+     * Refunds a settled payment. Simulated in sandbox; live calls hit the
+     * PayFast API.
      *
      * @return array{status: string}
      */
@@ -181,6 +196,76 @@ class PayFastService
             return ['status' => 'success'];
         }
 
-        throw new \RuntimeException('Live PayFast refunds require symfony/http-client and are not enabled in this build.');
+        $response = $this->apiRequest(sprintf('/refunds/%s', urlencode($pfPaymentId)), [
+            'amount' => (string) $amountCents,
+            'reason' => 'Order refund',
+        ]);
+
+        return ['status' => $this->apiStatus($response)];
+    }
+
+    /**
+     * Performs a signed POST to the PayFast API. Transport or decoding failures
+     * resolve to an empty payload so the caller can treat the call as failed
+     * rather than raising.
+     *
+     * @param array<string, string> $body
+     *
+     * @return array<string, mixed>
+     */
+    private function apiRequest(string $path, array $body): array
+    {
+        $headers = [
+            'merchant-id' => $this->merchantId,
+            'version' => self::API_VERSION,
+            'timestamp' => new DateTime()->format('c'),
+        ];
+        $headers['signature'] = $this->apiSignature(array_merge($headers, $body));
+
+        try {
+            return $this->httpClient->request('POST', self::API_BASE_URL . $path, [
+                'headers' => $headers,
+                'body' => $body,
+            ])->toArray(false);
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $response
+     */
+    private function apiStatus(array $response): string
+    {
+        $succeeded = ($response['status'] ?? null) === 'success' || ($response['code'] ?? null) === 200;
+
+        return $succeeded ? 'success' : 'failed';
+    }
+
+    /**
+     * PayFast API signature: the passphrase (when set) is merged into the
+     * header + body parameters, the set is sorted alphabetically by key, and
+     * the resulting "key=urlencoded-value" string is md5-hashed.
+     *
+     * @param array<string, string> $params
+     */
+    private function apiSignature(array $params): string
+    {
+        if ($this->passphrase !== '') {
+            $params['passphrase'] = $this->passphrase;
+        }
+
+        ksort($params);
+
+        $pairs = [];
+        foreach ($params as $key => $value) {
+            $value = (string) $value;
+            if ($value === '') {
+                continue;
+            }
+            $pairs[] = $key . '=' . urlencode(trim($value));
+        }
+
+        return md5(implode('&', $pairs));
     }
 }
