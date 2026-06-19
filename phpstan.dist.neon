@@ -1,0 +1,18 @@
+parameters:
+    level: 5
+    paths:
+        - src/
+    excludePaths:
+        # Framework glue; getAllowedEnvs() is invoked by MicroKernelTrait.
+        - src/Kernel.php
+    ignoreErrors:
+        # Doctrine hydrates mapped entity properties via reflection, so the
+        # "only written / only read" checks are false positives for them.
+        -
+            identifier: property.onlyRead
+            path: src/Entity/*
+        # The JMS post_serialize event exposes visitProperty() on the concrete
+        # JsonSerializationVisitor, not the VisitorInterface PHPStan infers.
+        -
+            identifier: method.notFound
+            path: src/Service/Serialization/*

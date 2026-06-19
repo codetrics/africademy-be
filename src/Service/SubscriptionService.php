@@ -90,7 +90,7 @@ class SubscriptionService
         $chargeAmount = $fullAmount - $discount;
 
         $charge = $this->payFastService->chargeToken($token, $chargeAmount, $plan->getName());
-        if (($charge['status'] ?? '') !== 'success') {
+        if ($charge['status'] !== 'success') {
             throw SubscriptionException::chargeFailed();
         }
 
@@ -221,7 +221,7 @@ class SubscriptionService
         if (!is_null($token)) {
             try {
                 $charge = $this->payFastService->chargeToken($token, $plan->getPrice()->getAmountCents(), $plan->getName());
-                $succeeded = ($charge['status'] ?? '') === 'success';
+                $succeeded = $charge['status'] === 'success';
                 $pfPaymentId = $charge['pf_payment_id'] ?? null;
             } catch (Throwable) {
                 $succeeded = false;

@@ -11,7 +11,6 @@ use Lexik\Bundle\JWTAuthenticationBundle\Event\AuthenticationSuccessEvent;
 use Lexik\Bundle\JWTAuthenticationBundle\Events;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * Records login successes/failures to the user log. Hooks lexik's
@@ -36,8 +35,7 @@ class AuthLogSubscriber implements EventSubscriberInterface
 
     public function onAuthenticationSuccess(AuthenticationSuccessEvent $event): void
     {
-        $user = $event->getUser();
-        $username = $user instanceof UserInterface ? $user->getUserIdentifier() : null;
+        $username = $event->getUser()->getUserIdentifier();
 
         [$userAgent, $ipAddress] = $this->requestMeta();
         $this->userLogService->log(UserLogType::LOGIN, 'User logged in', $username, $userAgent, $ipAddress);

@@ -78,7 +78,7 @@ class RefundService
             // actually returned. A failure leaves everything pending and retriable.
             if (!is_null($order->getPfPaymentId())) {
                 $result = $this->payFastService->refund($order->getPfPaymentId(), $order->getAmount()->getAmountCents());
-                if (($result['status'] ?? '') !== 'success') {
+                if ($result['status'] !== 'success') {
                     $this->entityManager->rollback();
                     throw OrderException::refundGatewayFailed();
                 }

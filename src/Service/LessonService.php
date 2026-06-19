@@ -7,13 +7,11 @@ namespace App\Service;
 use App\Entity\Course;
 use App\Entity\Lesson;
 use App\Repository\LessonRepository;
-use Doctrine\ORM\EntityManagerInterface;
 
 class LessonService
 {
     public function __construct(
         private readonly LessonRepository $lessonRepository,
-        private readonly EntityManagerInterface $entityManager,
     ) {
     }
 
