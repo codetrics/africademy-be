@@ -468,6 +468,11 @@ paths:
                                 tags: { type: array, items: { type: string } }
                                 objectives: { type: array, items: { type: string } }
                                 thumbnail: { type: string, nullable: true }
+                                is_free: { type: boolean }
+                                is_purchasable: { type: boolean }
+                                included_in_subscription: { type: boolean }
+                                certificate_enabled: { type: boolean }
+                                requires_quiz: { type: boolean }
             responses:
                 '201':
                     description: Created course
@@ -517,6 +522,11 @@ paths:
                                 tags: { type: array, items: { type: string } }
                                 objectives: { type: array, items: { type: string } }
                                 thumbnail: { type: string, nullable: true }
+                                is_free: { type: boolean }
+                                is_purchasable: { type: boolean }
+                                included_in_subscription: { type: boolean }
+                                certificate_enabled: { type: boolean }
+                                requires_quiz: { type: boolean }
             responses:
                 '200':
                     description: Updated course
