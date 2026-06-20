@@ -600,6 +600,7 @@ paths:
                                 status: { type: string, enum: [draft, published] }
                                 duration_minutes: { type: integer, nullable: true }
                                 content_ref: { type: string, nullable: true }
+                                position: { type: integer }
             responses:
                 '201':
                     description: Created lesson
@@ -1147,6 +1148,7 @@ paths:
                                 title: { type: string }
                                 description: { type: string, nullable: true }
                                 price_amount_cents: { type: integer }
+                                price_currency: { type: string, example: ZAR }
                                 thumbnail: { type: string, nullable: true }
             responses:
                 '201':
@@ -1182,6 +1184,7 @@ paths:
                                 title: { type: string }
                                 description: { type: string, nullable: true }
                                 price_amount_cents: { type: integer }
+                                price_currency: { type: string, example: ZAR }
                                 thumbnail: { type: string, nullable: true }
             responses:
                 '200':
