@@ -261,6 +261,7 @@ paths:
                                 email: { type: string, format: email }
             responses:
                 '200': { description: Code sent if the email exists }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '429': { $ref: '#/components/responses/RateLimited' }
     /auth/verify-email:
         post:
@@ -279,6 +280,7 @@ paths:
                                 code: { type: string, example: '314832' }
             responses:
                 '200': { description: Email verified }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
     /auth/password/forgot:
@@ -298,6 +300,7 @@ paths:
                                 email: { type: string, format: email }
             responses:
                 '200': { description: Code sent if the email exists }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '429': { $ref: '#/components/responses/RateLimited' }
     /auth/password/reset:
         post:
@@ -317,6 +320,7 @@ paths:
                                 password: { type: string, format: password, minLength: 8 }
             responses:
                 '200': { description: Password updated }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
     /profile:
@@ -359,6 +363,7 @@ paths:
                                 type: object
                                 properties:
                                     profile: { $ref: '#/components/schemas/Profile' }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
     /profile/avatar:
@@ -397,6 +402,7 @@ paths:
                                 type: object
                                 properties:
                                     profile: { $ref: '#/components/schemas/Profile' }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
         delete:
@@ -707,6 +713,7 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '413': { $ref: '#/components/responses/PayloadTooLarge' }
                 '422': { $ref: '#/components/responses/ValidationError' }
         delete:
             tags: [Lessons]
@@ -849,6 +856,7 @@ paths:
                                 type: object
                                 properties:
                                     review: { $ref: '#/components/schemas/Review' }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
         delete:
@@ -1156,6 +1164,7 @@ paths:
                     content:
                         application/json:
                             schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
     /bundles/{id}:
@@ -1224,6 +1233,7 @@ paths:
                     content:
                         application/json:
                             schema: { type: object, properties: { bundle: { $ref: '#/components/schemas/Bundle' } } }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1268,6 +1278,7 @@ paths:
                                         properties:
                                             url: { type: string }
                                             fields: { type: object, additionalProperties: { type: string } }
+                '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1304,6 +1315,7 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
+                '502': { $ref: '#/components/responses/GatewayError' }
     /admin/refund-requests/{id}/reject:
         post:
             tags: [Admin]
@@ -1361,6 +1373,7 @@ paths:
                     content:
                         application/json:
                             schema: { type: object, properties: { coupon: { $ref: '#/components/schemas/Coupon' } } }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1388,8 +1401,10 @@ paths:
                     content:
                         application/json:
                             schema: { type: object, properties: { coupon: { $ref: '#/components/schemas/Coupon' } } }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
         delete:
             tags: [Admin]
             summary: Delete a coupon (ROLE_ADMIN)
@@ -1497,6 +1512,7 @@ paths:
                                 type: object
                                 properties:
                                     subscription: { $ref: '#/components/schemas/Subscription' }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '402': { $ref: '#/components/responses/Forbidden' }
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1564,6 +1580,7 @@ paths:
                                     progress: { $ref: '#/components/schemas/Progress' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /courses/{id}/learn:
         get:
             tags: [Progress]
@@ -1585,6 +1602,7 @@ paths:
                                         items: { $ref: '#/components/schemas/LearnLesson' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /community/posts:
         get:
             tags: [Community]
@@ -1634,6 +1652,7 @@ paths:
                                     post: { $ref: '#/components/schemas/CommunityPost' }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
     /community/trending:
         get:
             tags: [Community]
@@ -1739,6 +1758,7 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
     /community/posts/{id}/like:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
@@ -1757,6 +1777,7 @@ paths:
                                     liked: { type: boolean }
                                     like_count: { type: integer }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '429': { $ref: '#/components/responses/RateLimited' }
     /community/posts/{id}/comments:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
@@ -1802,6 +1823,7 @@ paths:
                                     comment: { $ref: '#/components/schemas/CommunityComment' }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '429': { $ref: '#/components/responses/RateLimited' }
     /community/posts/{id}/hide:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: Post ULID }
@@ -2092,6 +2114,7 @@ paths:
                                 type: object
                                 properties:
                                     category: { $ref: '#/components/schemas/BlogCategory' }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
         delete:
@@ -2227,6 +2250,7 @@ paths:
                                                 bucket: { type: string }
                                                 amount_cents: { type: integer }
                 '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /admin/analytics/enrollments:
         get:
             tags: [Analytics]
@@ -2255,6 +2279,7 @@ paths:
                                                 bucket: { type: string }
                                                 count: { type: integer }
                 '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /admin/analytics/top-courses:
         get:
             tags: [Analytics]
@@ -2837,6 +2862,16 @@ components:
                     schema: { $ref: '#/components/schemas/Error' }
         RateLimited:
             description: Too many requests
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        PayloadTooLarge:
+            description: Uploaded file exceeds the maximum allowed size
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        GatewayError:
+            description: Upstream payment gateway error
             content:
                 application/json:
                     schema: { $ref: '#/components/schemas/Error' }
