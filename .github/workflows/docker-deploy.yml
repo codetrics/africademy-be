@@ -107,6 +107,12 @@ jobs:
             ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
             "cd '${{ env.COMPOSE_PATH }}' && sudo APP_USER='${{ secrets.C3_SSH_USER }}' docker compose up -d --build testing_backend"
 
+      - name: Run database migrations
+        run: |
+          ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
+            ${{ secrets.C3_SSH_USER }}@${{ secrets.C3_SSH_HOST }} \
+            "sudo docker compose -f '${{ env.COMPOSE_PATH }}/docker-compose.yml' exec -T --user '${{ secrets.C3_SSH_USER }}' testing_backend php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration --env=prod --no-debug"
+
       - name: Clear Symfony Cache
         run: |
           ssh -p ${{ env.SSH_PORT }} -o StrictHostKeyChecking=no \
