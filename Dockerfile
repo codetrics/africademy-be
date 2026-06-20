@@ -134,14 +134,15 @@ USER root
 # Application source — busts on any code change (expected)
 COPY --chown=${APP_USER}:${APP_USER} . /home/${APP_USER}/public_html
 
-# Final build: assets, autoloader, env cache. Always re-runs on source change (correct)
+# Final build: assets + optimised autoloader. Env config is NOT baked here — the
+# real .env.local (and config/jwt) is bind-mounted at runtime by docker-compose,
+# so we deliberately do not run `composer dump-env prod` (which would compile the
+# committed .env placeholders into a .env.local.php that shadows the mount).
 USER ${APP_USER}
 RUN bash -c "source $NVM_DIR/nvm.sh \
     && npm run build \
     && npm prune --production \
-    && composer dump-autoload --optimize --no-dev \
-    && composer dump-env prod \
-    && rm -f .env.local"
+    && composer dump-autoload --optimize --no-dev"
 USER root
 
 EXPOSE 80
