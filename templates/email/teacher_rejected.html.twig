@@ -1,0 +1,12 @@
+{% extends 'email/base.html.twig' %}
+
+{% block title %}Update on your teacher application{% endblock %}
+
+{% block content %}
+    <h1 style="margin:0 0 16px; font-size:20px;">Update on your teacher application</h1>
+    <p style="margin:0 0 16px;">Hi {{ first_name }},</p>
+    <p style="margin:0 0 16px; line-height:1.5;">Thank you for your interest in teaching on Africademy. After review, we're unable to approve your teacher account at this time.</p>
+    {% if reason is defined and reason is not empty %}
+        <p style="margin:0 0 16px; line-height:1.5;">{{ reason }}</p>
+    {% endif %}
+{% endblock %}

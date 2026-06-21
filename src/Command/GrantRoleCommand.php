@@ -41,8 +41,10 @@ final class GrantRoleCommand extends AbstractCommand
         $role = strtoupper((string) $input->getArgument('role'));
         $revoke = (bool) $input->getOption('revoke');
 
-        if (!str_starts_with($role, 'ROLE_')) {
-            $io->error(sprintf('Invalid role "%s": roles must start with ROLE_.', $role));
+        $manageableRoles = [User::ROLE_STUDENT, User::ROLE_TEACHER, User::ROLE_ADMIN];
+
+        if (!in_array($role, $manageableRoles, true)) {
+            $io->error(sprintf('Invalid role "%s": allowed roles are %s.', $role, implode(', ', $manageableRoles)));
 
             return self::FAILURE;
         }
@@ -55,7 +57,7 @@ final class GrantRoleCommand extends AbstractCommand
             return self::FAILURE;
         }
 
-        $roles = $user->getRoles();
+        $roles = $user->getRawRoles();
 
         if ($revoke) {
             $roles = array_values(array_filter($roles, static fn (string $existingRole): bool => $existingRole !== $role));

@@ -41,6 +41,16 @@ class AdminDirectoryService
         return $this->userRepository->findOneByPublicId($publicId);
     }
 
+    public function teachersQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
+    {
+        return $this->userRepository->createTeacherQueryBuilder($search, $status);
+    }
+
+    public function findTeacher(Ulid $publicId): ?User
+    {
+        return $this->userRepository->findOneByPublicId($publicId);
+    }
+
     /**
      * Scalar summary for a single student: enrollments, lifetime spend and the
      * current subscription status.

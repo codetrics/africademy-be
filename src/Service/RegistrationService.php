@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\User;
+use App\Enum\AccountType;
+use App\Enum\UserStatus;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
@@ -21,14 +23,22 @@ class RegistrationService
 
     /**
      * Hashes the password and persists the User (with its cascaded UserProfile)
-     * in a single transaction.
+     * in a single transaction. Students are active immediately; teachers receive
+     * ROLE_TEACHER straight away but stay pending until an admin approves them.
      *
      * @throws Exception when the email address is already registered
      */
-    public function register(User $user, string $plainPassword): User
+    public function register(User $user, string $plainPassword, AccountType $accountType): User
     {
         if (!is_null($this->userRepository->findOneByEmail($user->getEmail()))) {
             throw new Exception('This email address is already registered.');
+        }
+
+        if ($accountType === AccountType::Teacher) {
+            $user->setRoles([User::ROLE_TEACHER]);
+            $user->setStatus(UserStatus::PendingReview);
+        } else {
+            $user->setRoles([User::ROLE_STUDENT]);
         }
 
         $user->setPassword($this->passwordHasher->hashPassword($user, $plainPassword));
