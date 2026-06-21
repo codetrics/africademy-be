@@ -18,6 +18,7 @@ class RegistrationService
         private readonly UserRepository $userRepository,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly EntityManagerInterface $entityManager,
+        private readonly NotificationService $notificationService,
     ) {
     }
 
@@ -52,6 +53,24 @@ class RegistrationService
             throw $exception;
         }
 
+        $this->sendWelcomeEmail($user, $accountType);
+
         return $user;
+    }
+
+    private function sendWelcomeEmail(User $user, AccountType $accountType): void
+    {
+        [$subject, $template] = $accountType === AccountType::Teacher
+            ? ['Your Africademy facilitator account is pending approval', 'email/welcome_facilitator.html.twig']
+            : ['Welcome to Africademy', 'email/welcome_student.html.twig'];
+
+        $this->notificationService->createEmailNotification(
+            [$user->getEmail()],
+            $subject,
+            $template,
+            [
+                'first_name' => $user->getProfile()->getFirstName(),
+            ],
+        );
     }
 }
