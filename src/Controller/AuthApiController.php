@@ -25,8 +25,6 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 final class AuthApiController extends AbstractController
 {
-    private const int MINIMUM_PASSWORD_LENGTH = 8;
-
     #[Route(
         '/api/{version}/auth/register',
         name: 'api_auth_register',
@@ -79,10 +77,10 @@ final class AuthApiController extends AbstractController
             );
         }
 
-        if (strlen((string) $data['password']) < self::MINIMUM_PASSWORD_LENGTH) {
+        foreach ($validator->validate((string) $data['password'], Tools::passwordConstraints()) as $violation) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_VALIDATION,
-                sprintf('Password must be at least %d characters long.', self::MINIMUM_PASSWORD_LENGTH),
+                $violation->getMessage(),
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }

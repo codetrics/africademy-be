@@ -191,7 +191,7 @@ paths:
                             required: [email, password, first_name, last_name, account_type]
                             properties:
                                 email: { type: string, format: email, example: jane@example.com }
-                                password: { type: string, format: password, minLength: 8, example: s3cretpass }
+                                password: { type: string, format: password, minLength: 8, example: s3cretpass, description: 'Min 8 chars; rejected if found in a known data breach' }
                                 first_name: { type: string, example: Jane }
                                 last_name: { type: string, example: Doe }
                                 account_type: { type: string, enum: [student, facilitator], example: student }
@@ -389,7 +389,7 @@ paths:
                             properties:
                                 email: { type: string, format: email }
                                 code: { type: string, example: '289430' }
-                                password: { type: string, format: password, minLength: 8 }
+                                password: { type: string, format: password, minLength: 8, description: 'Min 8 chars; rejected if found in a known data breach' }
             responses:
                 '200': { description: Password updated }
                 '400': { $ref: '#/components/responses/BadRequest' }
@@ -435,6 +435,29 @@ paths:
                                 type: object
                                 properties:
                                     profile: { $ref: '#/components/schemas/Profile' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /profile/password:
+        post:
+            tags: [Profile]
+            summary: Change the authenticated user's password
+            description: >
+                Changes the password while logged in. Requires the current password. The new password
+                must be at least 8 characters, different from the current one, and not found in a known
+                data breach (checked via the Pwned Passwords k-anonymity API).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [current_password, new_password]
+                            properties:
+                                current_password: { type: string, format: password }
+                                new_password: { type: string, format: password, minLength: 8 }
+            responses:
+                '204': { description: Password changed }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
