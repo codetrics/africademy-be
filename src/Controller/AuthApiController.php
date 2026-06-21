@@ -15,6 +15,7 @@ use App\Service\SerializerService;
 use App\Service\UserLogService;
 use App\Service\VerificationService;
 use Exception;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -40,6 +41,7 @@ final class AuthApiController extends AbstractController
         RateLimiterFactoryInterface $registrationLimiter,
         UserLogService $userLogService,
         VerificationService $verificationService,
+        LoggerInterface $logger,
     ): JsonResponse {
         if (!$registrationLimiter->create($request->getClientIp())->consume()->isAccepted()) {
             return new JsonExceptionResponse(
@@ -112,7 +114,11 @@ final class AuthApiController extends AbstractController
             );
         }
 
-        $verificationService->requestEmailVerification($user);
+        try {
+            $verificationService->requestEmailVerification($user);
+        } catch (Exception $exception) {
+            $logger->error(sprintf('Failed to send verification email for %s: %s', $user->getEmail(), $exception->getMessage()));
+        }
 
         $userLogService->log(
             UserLogType::REGISTER,

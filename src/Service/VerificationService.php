@@ -22,6 +22,7 @@ class VerificationService
         private readonly UserRepository $userRepository,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly NotificationService $notificationService,
+        private readonly RefreshTokenService $refreshTokenService,
     ) {
     }
 
@@ -106,7 +107,11 @@ class VerificationService
         }
 
         $user->setPassword($this->passwordHasher->hashPassword($user, $newPassword));
+        // A reset replaces a possibly-compromised credential: drop the OTP trust
+        // window so the next login re-verifies, and revoke existing sessions.
+        $user->setLastOtpAt(null);
         $this->userRepository->save($user, true);
+        $this->refreshTokenService->revokeAllForUser($user);
 
         return true;
     }
@@ -160,7 +165,20 @@ class VerificationService
             return false;
         }
 
+        // Burn the code after too many wrong guesses so a short-lived 6-digit
+        // code cannot be brute-forced within its TTL.
+        if ($verificationCode->hasReachedMaxAttempts()) {
+            $verificationCode->setUsedAt(new DateTime());
+            $this->verificationCodeRepository->save($verificationCode, true);
+
+            return false;
+        }
+
+        $verificationCode->incrementAttempts();
+
         if (!password_verify($plainCode, $verificationCode->getCodeHash())) {
+            $this->verificationCodeRepository->save($verificationCode, true);
+
             return false;
         }
 

@@ -7,7 +7,6 @@ namespace App\Service;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use DateTime;
-use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
@@ -36,7 +35,6 @@ class OtpLoginService
         private readonly RefreshTokenManagerInterface $refreshTokenManager,
         private readonly UserRepository $userRepository,
         private readonly VerificationService $verificationService,
-        private readonly EntityManagerInterface $entityManager,
         #[Autowire(param: 'gesdinet_jwt_refresh_token.ttl')]
         private readonly int $refreshTokenTtl,
     ) {

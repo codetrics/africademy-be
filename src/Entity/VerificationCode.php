@@ -23,6 +23,8 @@ class VerificationCode
     use HasPublicIdTrait;
     use TimestampableTrait;
 
+    public const int MAX_ATTEMPTS = 5;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -43,6 +45,9 @@ class VerificationCode
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
     private ?DateTime $usedAt = null;
+
+    #[ORM\Column(options: ['default' => 0])]
+    private int $attempts = 0;
 
     public function __construct()
     {
@@ -109,8 +114,24 @@ class VerificationCode
         return $this;
     }
 
+    public function getAttempts(): int
+    {
+        return $this->attempts;
+    }
+
+    public function incrementAttempts(): static
+    {
+        $this->attempts++;
+        return $this;
+    }
+
     public function isExpired(): bool
     {
         return $this->expiresAt < new DateTime();
+    }
+
+    public function hasReachedMaxAttempts(): bool
+    {
+        return $this->attempts >= self::MAX_ATTEMPTS;
     }
 }

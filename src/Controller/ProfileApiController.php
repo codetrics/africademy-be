@@ -11,6 +11,7 @@ use App\Repository\UserProfileRepository;
 use App\Repository\UserRepository;
 use App\Service\AvatarUploadService;
 use App\Service\Helper\Tools;
+use App\Service\RefreshTokenService;
 use App\Service\SerializerService;
 use App\Service\UserLogService;
 use DateTime;
@@ -144,6 +145,7 @@ final class ProfileApiController extends AbstractController
         UserPasswordHasherInterface $passwordHasher,
         ValidatorInterface $validator,
         UserLogService $userLogService,
+        RefreshTokenService $refreshTokenService,
     ): JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -201,7 +203,10 @@ final class ProfileApiController extends AbstractController
         }
 
         $user->setPassword($passwordHasher->hashPassword($user, $newPassword));
+        // Force re-OTP on the next login and end other sessions after a credential change.
+        $user->setLastOtpAt(null);
         $userRepository->save($user, true);
+        $refreshTokenService->revokeAllForUser($user);
 
         $userLogService->log(
             UserLogType::PASSWORD_CHANGE,
