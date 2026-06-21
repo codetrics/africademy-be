@@ -13,7 +13,9 @@ info:
         authenticated per-request with a JWT bearer token (no sessions/cookies).
 
         ### Authentication & roles
-        1. `POST /auth/register` — create a user + profile (returns **no** token).
+        1. `POST /auth/register` — create a user + profile (returns **no** token). An
+           `account_type` (`student` or `teacher`) is required; teachers are created
+           pending admin approval and cannot log in until approved.
         2. `POST /auth/verify-email/request` then `POST /auth/verify-email` — verify the
            email with the OTP (some actions require a verified email).
         3. `POST /auth/login` — returns a JWT **access token** (TTL ~1h) and a
@@ -2557,8 +2559,8 @@ components:
             properties:
                 id: { type: string, description: ULID public identifier }
                 email: { type: string, format: email }
-                roles: { type: array, items: { type: string } }
-                status: { type: string, enum: [active, suspended] }
+                roles: { type: array, items: { type: string }, description: 'Base ROLE_USER is always present, plus any grantable ROLE_STUDENT/ROLE_TEACHER/ROLE_ADMIN' }
+                status: { type: string, enum: [active, pending_review, rejected, suspended] }
                 email_verified: { type: boolean }
                 email_verified_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
                 profile: { $ref: '#/components/schemas/Profile' }
