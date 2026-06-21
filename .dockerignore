@@ -10,6 +10,10 @@ vendor
 node_modules
 public/build
 tests
+# Secrets / runtime-mounted paths. .env.local and config/jwt are bind-mounted at
+# runtime by docker-compose, never baked into the image — so the Dockerfile must
+# NOT run `composer dump-env prod` (it would compile these placeholders into a
+# .env.local.php that shadows the mount). See ../codetrics-lab docker-compose.yml.
 .env.local
 .env.local.php
 .env.*.local
