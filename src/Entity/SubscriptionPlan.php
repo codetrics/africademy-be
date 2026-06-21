@@ -12,6 +12,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation\ExclusionPolicy;
 use JMS\Serializer\Annotation\Expose;
+use JMS\Serializer\Annotation\Groups;
 use JMS\Serializer\Annotation\SerializedName;
 use JMS\Serializer\Annotation\Type;
 use JMS\Serializer\Annotation\VirtualProperty;
@@ -31,16 +32,19 @@ class SubscriptionPlan
     private int $id;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 100)]
     #[Type("string")]
     private string $name;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 120, unique: true)]
     #[Type("string")]
     private string $slug;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Embedded(class: Money::class)]
     #[Type("App\Entity\Money")]
     private Money $price;
@@ -49,6 +53,7 @@ class SubscriptionPlan
     private SubscriptionInterval $interval;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('is_active')]
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => true])]
     #[Type("boolean")]
@@ -111,6 +116,7 @@ class SubscriptionPlan
     }
 
     #[VirtualProperty(name: 'interval')]
+    #[Groups(['public'])]
     #[SerializedName('interval')]
     #[Type("string")]
     public function getIntervalValue(): string

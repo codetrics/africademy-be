@@ -6,6 +6,7 @@ namespace App\Entity\Traits;
 
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation\Expose;
+use JMS\Serializer\Annotation\Groups;
 use JMS\Serializer\Annotation\SerializedName;
 use JMS\Serializer\Annotation\Type;
 use Symfony\Component\Uid\Ulid;
@@ -17,6 +18,7 @@ use Symfony\Component\Uid\Ulid;
 trait HasPublicIdTrait
 {
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('id')]
     #[ORM\Column(type: 'ulid', unique: true)]
     #[Type("string")]

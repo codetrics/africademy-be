@@ -10,6 +10,7 @@ use App\Repository\CategoryRepository;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation\ExclusionPolicy;
 use JMS\Serializer\Annotation\Expose;
+use JMS\Serializer\Annotation\Groups;
 use JMS\Serializer\Annotation\Type;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -30,6 +31,7 @@ class Category
     private int $id;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 100)]
     #[Type("string")]
     #[Assert\NotBlank(message: 'Category name cannot be blank.')]
@@ -37,6 +39,7 @@ class Category
     private string $name;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 120, unique: true)]
     #[Type("string")]
     #[Assert\NotBlank(message: 'Category slug cannot be blank.')]
