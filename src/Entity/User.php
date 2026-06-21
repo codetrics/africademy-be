@@ -28,7 +28,8 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[UniqueEntity(fields: ['email'], message: 'This email address is already registered.')]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
-    public const string ROLE_DEFAULT = 'ROLE_STUDENT';
+    public const string ROLE_DEFAULT = 'ROLE_USER';
+    public const string ROLE_STUDENT = 'ROLE_STUDENT';
     public const string ROLE_TEACHER = 'ROLE_TEACHER';
     public const string ROLE_ADMIN = 'ROLE_ADMIN';
 
@@ -149,6 +150,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $roles[] = self::ROLE_DEFAULT;
 
         return array_unique($roles);
+    }
+
+    /**
+     * The roles persisted on this user, without the always-on base role that
+     * getRoles() appends. Use this when granting or revoking roles.
+     *
+     * @return string[]
+     */
+    public function getRawRoles(): array
+    {
+        return $this->roles;
     }
 
     /**

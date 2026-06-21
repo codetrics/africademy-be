@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Entity\UserLogType;
 use App\Entity\UserProfile;
+use App\Enum\AccountType;
 use App\Exceptions\JsonExceptionResponse;
 use App\Service\Helper\Tools;
 use App\Service\RegistrationService;
@@ -60,12 +61,21 @@ final class AuthApiController extends AbstractController
         }
 
         try {
-            Tools::checkExpectedKeys(['email', 'password', 'first_name', 'last_name'], $data);
+            Tools::checkExpectedKeys(['email', 'password', 'first_name', 'last_name', 'account_type'], $data);
         } catch (Exception $exception) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_INVALID_REQUEST,
                 $exception->getMessage(),
                 Response::HTTP_BAD_REQUEST,
+            );
+        }
+
+        $accountType = AccountType::tryFrom((string) $data['account_type']);
+        if (is_null($accountType)) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_VALIDATION,
+                'Invalid account_type. Allowed values are "student" or "teacher".',
+                Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
 
@@ -95,7 +105,7 @@ final class AuthApiController extends AbstractController
         }
 
         try {
-            $registrationService->register($user, (string) $data['password']);
+            $registrationService->register($user, (string) $data['password'], $accountType);
         } catch (Exception $exception) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_VALIDATION,

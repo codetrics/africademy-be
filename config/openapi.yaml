@@ -26,10 +26,11 @@ info:
         token."), or **missing** ("Authentication required."). A logged-in user without the
         required role/ownership gets `403`.
 
-        Roles are hierarchical: `ROLE_STUDENT` ⊂ `ROLE_TEACHER` ⊂ `ROLE_ADMIN`.
-        Students consume content; teachers author courses/lessons/blog posts they own
-        (record-level checks via voters); admins manage coupons, refunds, blog
-        categories, analytics, the student directory, and email campaigns.
+        Roles are hierarchical: `ROLE_USER` ⊂ `ROLE_STUDENT` ⊂ `ROLE_TEACHER` ⊂ `ROLE_ADMIN`.
+        Every account carries the base `ROLE_USER`; `ROLE_STUDENT`, `ROLE_TEACHER` and `ROLE_ADMIN`
+        are grantable/revokeable. Students consume content; teachers author courses/lessons/blog
+        posts they own (record-level checks via voters); admins manage coupons, refunds, blog
+        categories, analytics, the student and teacher directories, and email campaigns.
 
         ### Public endpoints (no token)
         - `POST /auth/*` (register, login, refresh, verify-email, password reset)
@@ -163,7 +164,11 @@ paths:
         post:
             tags: [Auth]
             summary: Register a new user
-            description: Creates a user and its profile. Returns no token — log in afterwards. Public endpoint.
+            description: >
+                Creates a user and its profile. Returns no token — log in afterwards. Public endpoint.
+                `account_type` selects the kind of account: `student` accounts get `ROLE_STUDENT` and
+                are active immediately; `teacher` accounts get `ROLE_TEACHER` straight away but stay
+                pending admin approval and cannot log in until approved.
             security: []
             requestBody:
                 required: true
@@ -171,12 +176,13 @@ paths:
                     application/json:
                         schema:
                             type: object
-                            required: [email, password, first_name, last_name]
+                            required: [email, password, first_name, last_name, account_type]
                             properties:
                                 email: { type: string, format: email, example: jane@example.com }
                                 password: { type: string, format: password, minLength: 8, example: s3cretpass }
                                 first_name: { type: string, example: Jane }
                                 last_name: { type: string, example: Doe }
+                                account_type: { type: string, enum: [student, teacher], example: student }
             responses:
                 '201':
                     description: User created
@@ -193,7 +199,11 @@ paths:
         post:
             tags: [Auth]
             summary: Authenticate and obtain tokens
-            description: Returns a JWT access token and a refresh token. Public endpoint.
+            description: >
+                Returns a JWT access token and a refresh token. Public endpoint. Non-active accounts
+                are rejected with `401` and a specific message: pending teachers ("Your account is
+                pending review."), rejected teachers ("Your account application was rejected."), and
+                suspended accounts ("Your account has been suspended.").
             security: []
             requestBody:
                 required: true
@@ -2360,6 +2370,62 @@ paths:
                                         items: { $ref: '#/components/schemas/UserLog' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+    /admin/teachers:
+        get:
+            tags: [Admin]
+            summary: Teacher directory (admin, paginated)
+            description: List users holding ROLE_TEACHER, filterable by free-text and account status. Filter by `pending_review` to find teachers awaiting approval.
+            parameters:
+                - { name: q, in: query, schema: { type: string }, description: Search email / first / last name }
+                - { name: status, in: query, schema: { type: string, enum: [active, pending_review, rejected, suspended] } }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: Matching teachers
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    teachers:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/User' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/teachers/{id}/approve:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: User ULID }
+        post:
+            tags: [Admin]
+            summary: Approve a pending teacher (admin)
+            description: Activates a teacher account that is pending review and emails them the decision.
+            responses:
+                '204': { description: Teacher approved }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/teachers/{id}/reject:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: User ULID }
+        post:
+            tags: [Admin]
+            summary: Reject a pending teacher (admin)
+            description: Rejects a teacher account that is pending review and emails them the decision.
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                reason: { type: string, description: Optional reason included in the rejection email }
+            responses:
+                '204': { description: Teacher rejected }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /admin/activity:
         get:
             tags: [Admin]

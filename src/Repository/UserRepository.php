@@ -82,6 +82,19 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     }
 
     /**
+     * Admin teacher directory: users holding ROLE_TEACHER, newest first, with an
+     * optional free-text search and an optional account-status filter.
+     */
+    public function createTeacherQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
+    {
+        $queryBuilder = $this->createAdminQueryBuilder($search, $status)
+            ->andWhere('appUser.roles LIKE :teacherRole')
+            ->setParameter('teacherRole', '%"' . User::ROLE_TEACHER . '"%');
+
+        return $queryBuilder;
+    }
+
+    /**
      * Used to upgrade (rehash) the user's password automatically over time.
      */
     public function upgradePassword(PasswordAuthenticatedUserInterface $user, string $newHashedPassword): void
