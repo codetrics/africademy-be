@@ -37,6 +37,10 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Catalogue & learning**
 - Courses, lessons, and categories; paginated catalogue with search/level/category filters.
+- **Public catalogue** — anonymous `GET /api/v1/public/*` exposes published courses,
+  bundles, active subscription plans, and categories. Responses are serialised with a
+  JMS `public` group allowlist, so only non-sensitive fields are returned to anonymous
+  callers (authenticated endpoints still return the full payload).
 - Enrollment and per-lesson progress tracking.
 - **Lesson video** — platform-hosted upload with access-gated, range-enabled
   streaming (basic hosting; no adaptive/HLS). Lessons may instead reference an

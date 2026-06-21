@@ -15,6 +15,7 @@ use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation\Exclude;
 use JMS\Serializer\Annotation\ExclusionPolicy;
 use JMS\Serializer\Annotation\Expose;
+use JMS\Serializer\Annotation\Groups;
 use JMS\Serializer\Annotation\SerializedName;
 use JMS\Serializer\Annotation\Type;
 use JMS\Serializer\Annotation\VirtualProperty;
@@ -38,6 +39,7 @@ class Bundle
     private int $id;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 200)]
     #[Type("string")]
     #[Assert\NotBlank(message: 'Bundle title cannot be blank.')]
@@ -46,21 +48,25 @@ class Bundle
 
     // System-generated from the title by BundleService; never user-supplied.
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 220, unique: true)]
     #[Type("string")]
     private string $slug;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Type("string")]
     private ?string $description = null;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Embedded(class: Money::class)]
     #[Type("App\Entity\Money")]
     private Money $price;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('thumbnail')]
     #[ORM\Column(length: 255, nullable: true)]
     #[Type("string")]
@@ -78,6 +84,7 @@ class Bundle
      * @var Collection<int, Course>
      */
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\ManyToMany(targetEntity: Course::class)]
     #[ORM\JoinTable(name: 'bundle_courses')]
     #[Type("ArrayCollection<App\Entity\Course>")]
@@ -163,6 +170,7 @@ class Bundle
     }
 
     #[VirtualProperty(name: 'status')]
+    #[Groups(['public'])]
     #[SerializedName('status')]
     #[Type("string")]
     public function getStatusValue(): string
@@ -182,6 +190,7 @@ class Bundle
     }
 
     #[VirtualProperty(name: 'instructor')]
+    #[Groups(['public'])]
     #[SerializedName('instructor')]
     public function getInstructor(): array
     {

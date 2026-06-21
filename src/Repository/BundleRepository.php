@@ -50,6 +50,11 @@ class BundleRepository extends ServiceEntityRepository
         return $this->findOneBy(['publicId' => $publicId]);
     }
 
+    public function findPublishedBySlug(string $slug): ?Bundle
+    {
+        return $this->findOneBy(['slug' => $slug, 'status' => BundleStatus::Published]);
+    }
+
     public function slugExists(string $slug): bool
     {
         return (int) $this->createQueryBuilder('bundle')

@@ -46,6 +46,9 @@ info:
 
         ### Public endpoints (no token)
         - `POST /auth/*` (register, login, refresh, verify-email, password reset)
+        - `GET /public/*` — anonymous catalogue (published courses & bundles, active plans,
+          categories). Responses use the `public` serialization group, so only non-sensitive
+          fields are returned; the equivalent authenticated endpoints return the full payload.
         - `GET /blog/posts`, `GET /blog/posts/{slug}`, `GET /blog/categories`,
           `GET /blog/posts/{id}/cover`
         - `POST /newsletter/subscribe`, `GET /newsletter/unsubscribe`
@@ -102,12 +105,30 @@ tags:
       description: >
         Registration, login (JWT access + refresh), token refresh, email verification (OTP),
         and password reset. Public — no token required. Register returns no token; log in afterwards.
+    - name: Public
+      description: >
+        Anonymous, read-only catalogue for visitors who have not signed in — courses, bundles,
+        subscription plans/prices, and categories under `/api/v1/public/*`. **No token required.**
+
+
+        Only **published** courses/bundles and **active** plans are returned. Responses are
+        serialized with the `public` group, an explicit allowlist of non-sensitive fields, so
+        anonymous callers never receive internal data (timestamps, owner identity, draft state,
+        or any user PII). The authenticated equivalents (tags **Courses**, **Bundles**,
+        **Subscription**) return the full payload and support the write operations.
+
+
+        Detail endpoints are addressed by **slug** (e.g. `GET /public/courses/{slug}`) for SEO;
+        these endpoints are exempt from the email-verification gate and are covered by the
+        standard anonymous rate limit (60 requests/minute per IP).
     - name: Profile
       description: >
         The authenticated user's profile (separate from auth identity): name, bio, locale,
         and avatar upload/streaming. The avatar field is an absolute URL to the stream endpoint.
     - name: Catalog
-      description: Public-facing course discovery — the paginated catalogue with search, category, and level filters.
+      description: >
+        Authenticated course discovery — the paginated catalogue with search, category, and level
+        filters, returning the full course payload. For anonymous browsing see the **Public** tag.
     - name: Courses
       description: >
         Course CRUD for facilitators (own courses, record-level voter checks) and reads for students.
@@ -173,6 +194,114 @@ tags:
         Admin operations — coupons, refund approval, blog categories, the student directory, the
         UserLog activity feed, and segmented email campaigns. ROLE_ADMIN only.
 paths:
+    /public/courses:
+        get:
+            tags: [Public]
+            summary: List published courses (public, paginated)
+            description: Anonymous catalogue of published courses. Returns the `public` serialization group only.
+            security: []
+            parameters:
+                - { name: q, in: query, schema: { type: string }, description: Search by title }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: Published courses
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    courses:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Course' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+    /public/courses/{slug}:
+        parameters:
+            - { name: slug, in: path, required: true, schema: { type: string }, description: Course slug }
+        get:
+            tags: [Public]
+            summary: Get a published course by slug (public)
+            security: []
+            responses:
+                '200':
+                    description: The course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /public/bundles:
+        get:
+            tags: [Public]
+            summary: List published bundles (public, paginated)
+            security: []
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: Published bundles
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    bundles:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Bundle' }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+    /public/bundles/{slug}:
+        parameters:
+            - { name: slug, in: path, required: true, schema: { type: string }, description: Bundle slug }
+        get:
+            tags: [Public]
+            summary: Get a published bundle by slug (public)
+            security: []
+            responses:
+                '200':
+                    description: The bundle
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    bundle: { $ref: '#/components/schemas/Bundle' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /public/plans:
+        get:
+            tags: [Public]
+            summary: List active subscription plans and prices (public)
+            security: []
+            responses:
+                '200':
+                    description: Active plans
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    plans:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/SubscriptionPlan' }
+    /public/categories:
+        get:
+            tags: [Public]
+            summary: List categories (public)
+            security: []
+            responses:
+                '200':
+                    description: Categories
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    categories:
+                                        type: array
+                                        items: { $ref: '#/components/schemas/Category' }
     /auth/register:
         post:
             tags: [Auth]

@@ -52,6 +52,11 @@ class CourseRepository extends ServiceEntityRepository
         return $this->findOneBy(['publicId' => $publicId]);
     }
 
+    public function findPublishedBySlug(string $slug): ?Course
+    {
+        return $this->findOneBy(['slug' => $slug, 'status' => CourseStatus::Published]);
+    }
+
     public function slugExists(string $slug): bool
     {
         return (int) $this->createQueryBuilder('course')

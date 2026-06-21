@@ -16,6 +16,7 @@ use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation\Exclude;
 use JMS\Serializer\Annotation\ExclusionPolicy;
 use JMS\Serializer\Annotation\Expose;
+use JMS\Serializer\Annotation\Groups;
 use JMS\Serializer\Annotation\SerializedName;
 use JMS\Serializer\Annotation\Type;
 use JMS\Serializer\Annotation\VirtualProperty;
@@ -39,6 +40,7 @@ class Course
     private int $id;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 200)]
     #[Type("string")]
     #[Assert\NotBlank(message: 'Course title cannot be blank.')]
@@ -47,17 +49,20 @@ class Course
 
     // System-generated from the title by CourseService; never user-supplied, so not validated here.
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 220, unique: true)]
     #[Type("string")]
     private string $slug;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 255, nullable: true)]
     #[Type("string")]
     #[Assert\Length(max: 255)]
     private ?string $tagline = null;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Type("string")]
     private ?string $description = null;
@@ -69,6 +74,7 @@ class Course
     private ?CourseLevel $level = null;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\ManyToOne(targetEntity: Category::class)]
     #[ORM\JoinColumn(name: 'category_id', referencedColumnName: 'id', nullable: false)]
     #[Type("App\Entity\Category")]
@@ -81,53 +87,62 @@ class Course
     private User $owner;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Embedded(class: Money::class)]
     #[Type("App\Entity\Money")]
     private Money $price;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('is_free')]
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
     #[Type("boolean")]
     private bool $isFree = false;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('is_purchasable')]
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
     #[Type("boolean")]
     private bool $isPurchasable = false;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('included_in_subscription')]
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
     #[Type("boolean")]
     private bool $includedInSubscription = false;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('certificate_enabled')]
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
     #[Type("boolean")]
     private bool $certificateEnabled = false;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('requires_quiz')]
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
     #[Type("boolean")]
     private bool $requiresQuiz = false;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('rating_average')]
     #[ORM\Column(type: Types::FLOAT, options: ['default' => 0])]
     #[Type("float")]
     private float $ratingAverage = 0.0;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('rating_count')]
     #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
     #[Type("integer")]
     private int $ratingCount = 0;
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('enrollment_count')]
     #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
     #[Type("integer")]
@@ -137,6 +152,7 @@ class Course
      * @var string[]
      */
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(type: Types::JSON)]
     #[Type("array<string>")]
     private array $tags = [];
@@ -145,11 +161,13 @@ class Course
      * @var string[]
      */
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(type: Types::JSON)]
     #[Type("array<string>")]
     private array $objectives = [];
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('thumbnail')]
     #[ORM\Column(length: 255, nullable: true)]
     #[Type("string")]
@@ -232,6 +250,7 @@ class Course
     }
 
     #[VirtualProperty(name: 'status')]
+    #[Groups(['public'])]
     #[SerializedName('status')]
     #[Type("string")]
     public function getStatusValue(): string
@@ -251,6 +270,7 @@ class Course
     }
 
     #[VirtualProperty(name: 'level')]
+    #[Groups(['public'])]
     #[SerializedName('level')]
     #[Type("string")]
     public function getLevelValue(): ?string
@@ -281,6 +301,7 @@ class Course
     }
 
     #[VirtualProperty(name: 'instructor')]
+    #[Groups(['public'])]
     #[SerializedName('instructor')]
     public function getInstructor(): array
     {

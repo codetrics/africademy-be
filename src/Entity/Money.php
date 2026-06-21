@@ -8,6 +8,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation\ExclusionPolicy;
 use JMS\Serializer\Annotation\Expose;
+use JMS\Serializer\Annotation\Groups;
 use JMS\Serializer\Annotation\SerializedName;
 use JMS\Serializer\Annotation\Type;
 
@@ -21,12 +22,14 @@ class Money
     public const string DEFAULT_CURRENCY = 'ZAR';
 
     #[Expose]
+    #[Groups(['public'])]
     #[SerializedName('amount_cents')]
     #[ORM\Column(type: Types::INTEGER)]
     #[Type("integer")]
     private int $amountCents;
 
     #[Expose]
+    #[Groups(['public'])]
     #[ORM\Column(length: 3)]
     #[Type("string")]
     private string $currency;
