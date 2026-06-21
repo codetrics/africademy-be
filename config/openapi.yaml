@@ -126,7 +126,9 @@ tags:
         The authenticated user's profile (separate from auth identity): name, bio, locale,
         and avatar upload/streaming. The avatar field is an absolute URL to the stream endpoint.
     - name: Catalog
-      description: Public-facing course discovery — the paginated catalogue with search, category, and level filters.
+      description: >
+        Authenticated course discovery — the paginated catalogue with search, category, and level
+        filters, returning the full course payload. For anonymous browsing see the **Public** tag.
     - name: Courses
       description: >
         Course CRUD for facilitators (own courses, record-level voter checks) and reads for students.
