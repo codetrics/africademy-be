@@ -25,11 +25,13 @@ final class Version20260621120000 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->addSql('UPDATE users SET roles = \'["ROLE_STUDENT"]\' WHERE roles = \'[]\'');
+        // id > 0 references the primary key so the statement is accepted under
+        // MySQL safe-update mode (sql_safe_updates).
+        $this->addSql('UPDATE users SET roles = \'["ROLE_STUDENT"]\' WHERE roles = \'[]\' AND id > 0');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('UPDATE users SET roles = \'[]\' WHERE roles = \'["ROLE_STUDENT"]\'');
+        $this->addSql('UPDATE users SET roles = \'[]\' WHERE roles = \'["ROLE_STUDENT"]\' AND id > 0');
     }
 }
