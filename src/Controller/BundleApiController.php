@@ -48,7 +48,7 @@ final class BundleApiController extends AbstractController
             return $this->unauthorized();
         }
 
-        $owner = $this->isGranted(User::ROLE_TEACHER) ? $user : null;
+        $owner = $this->isGranted(User::ROLE_FACILITATOR) ? $user : null;
         $pagination = $paginator->paginate(
             $bundleRepository->createCatalogQueryBuilder($owner),
             $request->query->getInt('page', 1),
@@ -71,7 +71,7 @@ final class BundleApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
-    #[IsGranted(User::ROLE_TEACHER)]
+    #[IsGranted(User::ROLE_FACILITATOR)]
     public function create(
         Request $request,
         BundleService $bundleService,

@@ -23,8 +23,8 @@ class RegistrationService
 
     /**
      * Hashes the password and persists the User (with its cascaded UserProfile)
-     * in a single transaction. Students are active immediately; teachers receive
-     * ROLE_TEACHER straight away but stay pending until an admin approves them.
+     * in a single transaction. Students are active immediately; facilitators receive
+     * ROLE_FACILITATOR straight away but stay pending until an admin approves them.
      *
      * @throws Exception when the email address is already registered
      */
@@ -34,8 +34,8 @@ class RegistrationService
             throw new Exception('This email address is already registered.');
         }
 
-        if ($accountType === AccountType::Teacher) {
-            $user->setRoles([User::ROLE_TEACHER]);
+        if ($accountType === AccountType::Facilitator) {
+            $user->setRoles([User::ROLE_FACILITATOR]);
             $user->setStatus(UserStatus::PendingReview);
         } else {
             $user->setRoles([User::ROLE_STUDENT]);

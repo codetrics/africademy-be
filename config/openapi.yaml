@@ -14,7 +14,7 @@ info:
 
         ### Authentication & roles
         1. `POST /auth/register` — create a user + profile (returns **no** token). An
-           `account_type` (`student` or `teacher`) is required; teachers are created
+           `account_type` (`student` or `facilitator`) is required; facilitators are created
            pending admin approval and cannot log in until approved.
         2. `POST /auth/verify-email/request` then `POST /auth/verify-email` — verify the
            email with the OTP (some actions require a verified email).
@@ -28,11 +28,11 @@ info:
         token."), or **missing** ("Authentication required."). A logged-in user without the
         required role/ownership gets `403`.
 
-        Roles are hierarchical: `ROLE_USER` ⊂ `ROLE_STUDENT` ⊂ `ROLE_TEACHER` ⊂ `ROLE_ADMIN`.
-        Every account carries the base `ROLE_USER`; `ROLE_STUDENT`, `ROLE_TEACHER` and `ROLE_ADMIN`
-        are grantable/revokeable. Students consume content; teachers author courses/lessons/blog
+        Roles are hierarchical: `ROLE_USER` ⊂ `ROLE_STUDENT` ⊂ `ROLE_FACILITATOR` ⊂ `ROLE_ADMIN`.
+        Every account carries the base `ROLE_USER`; `ROLE_STUDENT`, `ROLE_FACILITATOR` and `ROLE_ADMIN`
+        are grantable/revokeable. Students consume content; facilitators author courses/lessons/blog
         posts they own (record-level checks via voters); admins manage coupons, refunds, blog
-        categories, analytics, the student and teacher directories, and email campaigns.
+        categories, analytics, the student and facilitator directories, and email campaigns.
 
         ### Public endpoints (no token)
         - `POST /auth/*` (register, login, refresh, verify-email, password reset)
@@ -99,7 +99,7 @@ tags:
       description: Public-facing course discovery — the paginated catalogue with search, category, and level filters.
     - name: Courses
       description: >
-        Course CRUD for teachers (own courses, record-level voter checks) and reads for students.
+        Course CRUD for facilitators (own courses, record-level voter checks) and reads for students.
         Courses carry pricing flags (free / purchasable / included-in-subscription) that feed the access gate.
     - name: Lessons
       description: >
@@ -139,7 +139,7 @@ tags:
         tokenization checkout routed through the ITN webhook; used for subscription charges.
     - name: Bundles
       description: >
-        Teacher-owned course bundles (a set of the owner's published courses) sold one-off. A paid bundle
+        Facilitator-owned course bundles (a set of the owner's published courses) sold one-off. A paid bundle
         grants entitlements for every course in it and auto-enrolls the buyer.
     - name: Community
       description: >
@@ -147,7 +147,7 @@ tags:
         Authors (or admins) edit/delete; all actions require a logged-in student.
     - name: Blog
       description: >
-        Marketing blog. Reads are public; authoring (create/update/publish/cover) requires ROLE_TEACHER
+        Marketing blog. Reads are public; authoring (create/update/publish/cover) requires ROLE_FACILITATOR
         and is owner/admin-gated. Blog category management is admin-only.
     - name: Newsletter
       description: >
@@ -169,7 +169,7 @@ paths:
             description: >
                 Creates a user and its profile. Returns no token — log in afterwards. Public endpoint.
                 `account_type` selects the kind of account: `student` accounts get `ROLE_STUDENT` and
-                are active immediately; `teacher` accounts get `ROLE_TEACHER` straight away but stay
+                are active immediately; `facilitator` accounts get `ROLE_FACILITATOR` straight away but stay
                 pending admin approval and cannot log in until approved.
             security: []
             requestBody:
@@ -184,7 +184,7 @@ paths:
                                 password: { type: string, format: password, minLength: 8, example: s3cretpass }
                                 first_name: { type: string, example: Jane }
                                 last_name: { type: string, example: Doe }
-                                account_type: { type: string, enum: [student, teacher], example: student }
+                                account_type: { type: string, enum: [student, facilitator], example: student }
             responses:
                 '201':
                     description: User created
@@ -203,8 +203,8 @@ paths:
             summary: Authenticate and obtain tokens
             description: >
                 Returns a JWT access token and a refresh token. Public endpoint. Non-active accounts
-                are rejected with `401` and a specific message: pending teachers ("Your account is
-                pending review."), rejected teachers ("Your account application was rejected."), and
+                are rejected with `401` and a specific message: pending facilitators ("Your account is
+                pending review."), rejected facilitators ("Your account application was rejected."), and
                 suspended accounts ("Your account has been suspended.").
             security: []
             requestBody:
@@ -444,7 +444,7 @@ paths:
         get:
             tags: [Courses]
             summary: List courses (paginated)
-            description: Returns published courses. Teachers also see their own drafts.
+            description: Returns published courses. Facilitators also see their own drafts.
             parameters:
                 - { name: page, in: query, schema: { type: integer, default: 1 } }
                 - { name: limit, in: query, schema: { type: integer, default: 10 } }
@@ -467,7 +467,7 @@ paths:
         post:
             tags: [Courses]
             summary: Create a course (draft)
-            description: Requires ROLE_TEACHER. The slug is generated from the title.
+            description: Requires ROLE_FACILITATOR. The slug is generated from the title.
             requestBody:
                 required: true
                 content:
@@ -1139,7 +1139,7 @@ paths:
         get:
             tags: [Bundles]
             summary: List bundles (paginated)
-            description: Published bundles; teachers also see their own drafts.
+            description: Published bundles; facilitators also see their own drafts.
             parameters:
                 - { name: page, in: query, schema: { type: integer, default: 1 } }
                 - { name: limit, in: query, schema: { type: integer, default: 10 } }
@@ -1156,7 +1156,7 @@ paths:
                 '401': { $ref: '#/components/responses/Unauthorized' }
         post:
             tags: [Bundles]
-            summary: Create a bundle (draft) — ROLE_TEACHER
+            summary: Create a bundle (draft) — ROLE_FACILITATOR
             requestBody:
                 required: true
                 content:
@@ -1908,7 +1908,7 @@ paths:
         post:
             tags: [Blog]
             summary: Create a blog post (draft)
-            description: Requires ROLE_TEACHER. The post starts as a draft; read time is computed from the body.
+            description: Requires ROLE_FACILITATOR. The post starts as a draft; read time is computed from the body.
             requestBody:
                 required: true
                 content:
@@ -2372,11 +2372,11 @@ paths:
                                         items: { $ref: '#/components/schemas/UserLog' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
-    /admin/teachers:
+    /admin/facilitators:
         get:
             tags: [Admin]
-            summary: Teacher directory (admin, paginated)
-            description: List users holding ROLE_TEACHER, filterable by free-text and account status. Filter by `pending_review` to find teachers awaiting approval.
+            summary: Facilitator directory (admin, paginated)
+            description: List users holding ROLE_FACILITATOR, filterable by free-text and account status. Filter by `pending_review` to find facilitators awaiting approval.
             parameters:
                 - { name: q, in: query, schema: { type: string }, description: Search email / first / last name }
                 - { name: status, in: query, schema: { type: string, enum: [active, pending_review, rejected, suspended] } }
@@ -2384,37 +2384,37 @@ paths:
                 - { name: limit, in: query, schema: { type: integer, default: 20 } }
             responses:
                 '200':
-                    description: Matching teachers
+                    description: Matching facilitators
                     content:
                         application/json:
                             schema:
                                 type: object
                                 properties:
-                                    teachers:
+                                    facilitators:
                                         type: array
                                         items: { $ref: '#/components/schemas/User' }
                                     pagination: { $ref: '#/components/schemas/Pagination' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
-    /admin/teachers/{id}/approve:
+    /admin/facilitators/{id}/approve:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: User ULID }
         post:
             tags: [Admin]
-            summary: Approve a pending teacher (admin)
-            description: Activates a teacher account that is pending review and emails them the decision.
+            summary: Approve a pending facilitator (admin)
+            description: Activates a facilitator account that is pending review and emails them the decision.
             responses:
-                '204': { description: Teacher approved }
+                '204': { description: Facilitator approved }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
-    /admin/teachers/{id}/reject:
+    /admin/facilitators/{id}/reject:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: User ULID }
         post:
             tags: [Admin]
-            summary: Reject a pending teacher (admin)
-            description: Rejects a teacher account that is pending review and emails them the decision.
+            summary: Reject a pending facilitator (admin)
+            description: Rejects a facilitator account that is pending review and emails them the decision.
             requestBody:
                 required: false
                 content:
@@ -2424,7 +2424,7 @@ paths:
                             properties:
                                 reason: { type: string, description: Optional reason included in the rejection email }
             responses:
-                '204': { description: Teacher rejected }
+                '204': { description: Facilitator rejected }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -2559,7 +2559,7 @@ components:
             properties:
                 id: { type: string, description: ULID public identifier }
                 email: { type: string, format: email }
-                roles: { type: array, items: { type: string }, description: 'Base ROLE_USER is always present, plus any grantable ROLE_STUDENT/ROLE_TEACHER/ROLE_ADMIN' }
+                roles: { type: array, items: { type: string }, description: 'Base ROLE_USER is always present, plus any grantable ROLE_STUDENT/ROLE_FACILITATOR/ROLE_ADMIN' }
                 status: { type: string, enum: [active, pending_review, rejected, suspended] }
                 email_verified: { type: boolean }
                 email_verified_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
@@ -2909,7 +2909,7 @@ components:
                 application/json:
                     schema: { $ref: '#/components/schemas/Error' }
         Forbidden:
-            description: Authenticated but not permitted (e.g. not the owner, or missing ROLE_TEACHER)
+            description: Authenticated but not permitted (e.g. not the owner, or missing ROLE_FACILITATOR)
             content:
                 application/json:
                     schema: { $ref: '#/components/schemas/Error' }

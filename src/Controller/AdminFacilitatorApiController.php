@@ -11,7 +11,7 @@ use App\Service\AdminDirectoryService;
 use App\Service\Helper\Tools;
 use App\Service\ReturnType\PaginationReturnType;
 use App\Service\SerializerService;
-use App\Service\TeacherApprovalService;
+use App\Service\FacilitatorApprovalService;
 use Exception;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -23,11 +23,11 @@ use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Uid\Ulid;
 
-final class AdminTeacherApiController extends AbstractController
+final class AdminFacilitatorApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/admin/teachers',
-        name: 'api_admin_teacher_list',
+        '/api/{version}/admin/facilitators',
+        name: 'api_admin_facilitator_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_GET],
@@ -47,14 +47,14 @@ final class AdminTeacherApiController extends AbstractController
         }
 
         $pagination = $paginator->paginate(
-            $adminDirectoryService->teachersQueryBuilder($request->query->getString('q'), $status),
+            $adminDirectoryService->facilitatorsQueryBuilder($request->query->getString('q'), $status),
             $request->query->getInt('page', 1),
             Tools::clampLimit($request->query->getInt('limit', 20)),
         );
 
         $response = new JsonResponse();
         $response->setData([
-            'teachers' => json_decode($serializerService->serialize($pagination->getItems())),
+            'facilitators' => json_decode($serializerService->serialize($pagination->getItems())),
             'pagination' => json_decode($serializerService->serialize(new PaginationReturnType($pagination))),
         ]);
 
@@ -62,8 +62,8 @@ final class AdminTeacherApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/admin/teachers/{id}/approve',
-        name: 'api_admin_teacher_approve',
+        '/api/{version}/admin/facilitators/{id}/approve',
+        name: 'api_admin_facilitator_approve',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
@@ -72,16 +72,16 @@ final class AdminTeacherApiController extends AbstractController
     public function approve(
         Request $request,
         AdminDirectoryService $adminDirectoryService,
-        TeacherApprovalService $teacherApprovalService,
+        FacilitatorApprovalService $facilitatorApprovalService,
     ): JsonResponse {
-        $teacher = $adminDirectoryService->findTeacher(Ulid::fromString($request->attributes->getString('id')));
+        $facilitator = $adminDirectoryService->findFacilitator(Ulid::fromString($request->attributes->getString('id')));
 
-        if (!$teacher instanceof User) {
-            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Teacher not found.', Response::HTTP_NOT_FOUND);
+        if (!$facilitator instanceof User) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Facilitator not found.', Response::HTTP_NOT_FOUND);
         }
 
         try {
-            $teacherApprovalService->approve($teacher);
+            $facilitatorApprovalService->approve($facilitator);
         } catch (Exception $exception) {
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, $exception->getMessage(), Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -90,8 +90,8 @@ final class AdminTeacherApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/admin/teachers/{id}/reject',
-        name: 'api_admin_teacher_reject',
+        '/api/{version}/admin/facilitators/{id}/reject',
+        name: 'api_admin_facilitator_reject',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
@@ -100,19 +100,19 @@ final class AdminTeacherApiController extends AbstractController
     public function reject(
         Request $request,
         AdminDirectoryService $adminDirectoryService,
-        TeacherApprovalService $teacherApprovalService,
+        FacilitatorApprovalService $facilitatorApprovalService,
     ): JsonResponse {
-        $teacher = $adminDirectoryService->findTeacher(Ulid::fromString($request->attributes->getString('id')));
+        $facilitator = $adminDirectoryService->findFacilitator(Ulid::fromString($request->attributes->getString('id')));
 
-        if (!$teacher instanceof User) {
-            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Teacher not found.', Response::HTTP_NOT_FOUND);
+        if (!$facilitator instanceof User) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Facilitator not found.', Response::HTTP_NOT_FOUND);
         }
 
         $data = json_decode($request->getContent(), true);
         $reason = is_array($data) && array_key_exists('reason', $data) ? (string) $data['reason'] : null;
 
         try {
-            $teacherApprovalService->reject($teacher, $reason);
+            $facilitatorApprovalService->reject($facilitator, $reason);
         } catch (Exception $exception) {
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, $exception->getMessage(), Response::HTTP_UNPROCESSABLE_ENTITY);
         }

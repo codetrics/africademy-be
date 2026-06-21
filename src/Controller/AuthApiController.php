@@ -74,7 +74,7 @@ final class AuthApiController extends AbstractController
         if (is_null($accountType)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_VALIDATION,
-                'Invalid account_type. Allowed values are "student" or "teacher".',
+                'Invalid account_type. Allowed values are "student" or "facilitator".',
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
