@@ -12,17 +12,21 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Security\Core\Authorization\Voter\AuthenticatedVoter;
+use Symfony\Component\Security\Http\AccessMapInterface;
 
 /**
  * Forces authenticated users to verify their email before interacting with the
  * API. Runs just after the firewall (priority 7) so the user is available, and
- * blocks every /api request with a distinct email_not_verified error except the
- * auth endpoints, the caller's own profile read, and admins.
+ * blocks every /api request with a distinct email_not_verified error except
+ * PUBLIC_ACCESS routes (per security.yaml), the caller's own profile read, and
+ * admins.
  */
 class EmailVerificationSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private readonly Security $security,
+        private readonly AccessMapInterface $accessMap,
     ) {
     }
 
@@ -46,9 +50,11 @@ class EmailVerificationSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Auth endpoints (login, refresh, register, verify, resend, password reset)
-        // must stay reachable so the user can complete verification.
-        if (preg_match('#^/api/v\d+/auth(/|$)#', $path) === 1) {
+        // Public endpoints stay open regardless of verification. Reuse the firewall
+        // access map so any PUBLIC_ACCESS route (auth, blog reads, newsletter,
+        // certificate verification, …) is exempt without duplicating the list.
+        [$attributes] = $this->accessMap->getPatterns($request);
+        if (in_array(AuthenticatedVoter::PUBLIC_ACCESS, (array) $attributes, true)) {
             return;
         }
 

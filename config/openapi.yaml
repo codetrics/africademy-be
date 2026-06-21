@@ -28,10 +28,10 @@ info:
         token."), or **missing** ("Authentication required."). A logged-in user without the
         required role/ownership gets `403`.
 
-        **Email verification gate:** after login, every `/api` request returns
-        `403 { "error": "email_not_verified" }` until the user verifies their email — except
-        the `/auth/*` endpoints and `GET /profile` (so the client can complete verification),
-        and `ROLE_ADMIN` accounts, which are exempt.
+        **Email verification gate:** after login, authenticated `/api` requests return
+        `403 { "error": "email_not_verified" }` until the user verifies their email. Exempt:
+        all **public** endpoints (auth, blog reads, newsletter, certificate verification),
+        `GET /profile` (so the client can complete verification), and `ROLE_ADMIN` accounts.
 
         Roles are hierarchical: `ROLE_USER` ⊂ `ROLE_STUDENT` ⊂ `ROLE_TEACHER` ⊂ `ROLE_ADMIN`.
         Every account carries the base `ROLE_USER`; `ROLE_STUDENT`, `ROLE_TEACHER` and `ROLE_ADMIN`
