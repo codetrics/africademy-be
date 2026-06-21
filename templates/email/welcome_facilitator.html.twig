@@ -1,0 +1,11 @@
+{% extends 'email/base.html.twig' %}
+
+{% block title %}Your facilitator account is pending approval{% endblock %}
+
+{% block content %}
+    <h1 style="margin:0 0 16px; font-size:20px;">Welcome to Africademy</h1>
+    <p style="margin:0 0 16px;">Hi {{ first_name }},</p>
+    <p style="margin:0 0 16px; line-height:1.5;">Thanks for signing up as a facilitator. Your account has been created and is <strong>pending approval</strong> by our team.</p>
+    <p style="margin:0 0 16px; line-height:1.5;">You won't be able to access facilitator features just yet. We'll review your account and <strong>send you a communication once it has been approved</strong>.</p>
+    <p style="margin:0; color:#71717a; font-size:13px;">Thanks for your patience,<br>The Africademy team</p>
+{% endblock %}

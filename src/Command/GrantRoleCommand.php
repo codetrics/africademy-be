@@ -29,7 +29,7 @@ final class GrantRoleCommand extends AbstractCommand
     {
         $this
             ->addArgument('email', InputArgument::REQUIRED, 'Email of the target user')
-            ->addArgument('role', InputArgument::REQUIRED, 'Role to grant, e.g. ROLE_TEACHER')
+            ->addArgument('role', InputArgument::REQUIRED, 'Role to grant, e.g. ROLE_FACILITATOR')
             ->addOption('revoke', null, InputOption::VALUE_NONE, 'Revoke the role instead of granting it');
     }
 
@@ -41,7 +41,7 @@ final class GrantRoleCommand extends AbstractCommand
         $role = strtoupper((string) $input->getArgument('role'));
         $revoke = (bool) $input->getOption('revoke');
 
-        $manageableRoles = [User::ROLE_STUDENT, User::ROLE_TEACHER, User::ROLE_ADMIN];
+        $manageableRoles = [User::ROLE_STUDENT, User::ROLE_FACILITATOR, User::ROLE_ADMIN];
 
         if (!in_array($role, $manageableRoles, true)) {
             $io->error(sprintf('Invalid role "%s": allowed roles are %s.', $role, implode(', ', $manageableRoles)));

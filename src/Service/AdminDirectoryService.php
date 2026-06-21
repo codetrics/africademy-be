@@ -41,12 +41,12 @@ class AdminDirectoryService
         return $this->userRepository->findOneByPublicId($publicId);
     }
 
-    public function teachersQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
+    public function facilitatorsQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
     {
-        return $this->userRepository->createTeacherQueryBuilder($search, $status);
+        return $this->userRepository->createFacilitatorQueryBuilder($search, $status);
     }
 
-    public function findTeacher(Ulid $publicId): ?User
+    public function findFacilitator(Ulid $publicId): ?User
     {
         return $this->userRepository->findOneByPublicId($publicId);
     }

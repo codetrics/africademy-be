@@ -15,6 +15,7 @@ use App\Service\SerializerService;
 use App\Service\UserLogService;
 use App\Service\VerificationService;
 use Exception;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,8 +26,6 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 final class AuthApiController extends AbstractController
 {
-    private const int MINIMUM_PASSWORD_LENGTH = 8;
-
     #[Route(
         '/api/{version}/auth/register',
         name: 'api_auth_register',
@@ -42,6 +41,7 @@ final class AuthApiController extends AbstractController
         RateLimiterFactoryInterface $registrationLimiter,
         UserLogService $userLogService,
         VerificationService $verificationService,
+        LoggerInterface $logger,
     ): JsonResponse {
         if (!$registrationLimiter->create($request->getClientIp())->consume()->isAccepted()) {
             return new JsonExceptionResponse(
@@ -74,15 +74,15 @@ final class AuthApiController extends AbstractController
         if (is_null($accountType)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_VALIDATION,
-                'Invalid account_type. Allowed values are "student" or "teacher".',
+                'Invalid account_type. Allowed values are "student" or "facilitator".',
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
 
-        if (strlen((string) $data['password']) < self::MINIMUM_PASSWORD_LENGTH) {
+        foreach ($validator->validate((string) $data['password'], Tools::passwordConstraints()) as $violation) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_VALIDATION,
-                sprintf('Password must be at least %d characters long.', self::MINIMUM_PASSWORD_LENGTH),
+                $violation->getMessage(),
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
@@ -114,7 +114,11 @@ final class AuthApiController extends AbstractController
             );
         }
 
-        $verificationService->requestEmailVerification($user);
+        try {
+            $verificationService->requestEmailVerification($user);
+        } catch (Exception $exception) {
+            $logger->error(sprintf('Failed to send verification email for %s: %s', $user->getEmail(), $exception->getMessage()));
+        }
 
         $userLogService->log(
             UserLogType::REGISTER,

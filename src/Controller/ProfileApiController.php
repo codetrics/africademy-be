@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Entity\UserLogType;
 use App\Exceptions\JsonExceptionResponse;
 use App\Repository\UserProfileRepository;
+use App\Repository\UserRepository;
 use App\Service\AvatarUploadService;
+use App\Service\Helper\Tools;
+use App\Service\RefreshTokenService;
 use App\Service\SerializerService;
+use App\Service\UserLogService;
 use DateTime;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -17,6 +22,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -123,6 +129,94 @@ final class ProfileApiController extends AbstractController
         $response->setData(['profile' => json_decode($profileJSON)]);
 
         return $response;
+    }
+
+    #[Route(
+        '/api/{version}/profile/password',
+        name: 'api_profile_password_change',
+        requirements: ['_format' => 'json', 'version' => 'v1'],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_POST],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function changePassword(
+        Request $request,
+        UserRepository $userRepository,
+        UserPasswordHasherInterface $passwordHasher,
+        ValidatorInterface $validator,
+        UserLogService $userLogService,
+        RefreshTokenService $refreshTokenService,
+    ): JsonResponse {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            $exception = $this->createAccessDeniedException();
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_UNAUTHORIZED,
+                $exception->getMessage(),
+                Response::HTTP_UNAUTHORIZED,
+            );
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_INVALID_JSON,
+                'Invalid JSON payload',
+                Response::HTTP_BAD_REQUEST,
+            );
+        }
+
+        try {
+            Tools::checkExpectedKeys(['current_password', 'new_password'], $data);
+        } catch (Exception $exception) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_INVALID_REQUEST,
+                $exception->getMessage(),
+                Response::HTTP_BAD_REQUEST,
+            );
+        }
+
+        if (!$passwordHasher->isPasswordValid($user, (string) $data['current_password'])) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_VALIDATION,
+                'Current password is incorrect.',
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
+        }
+
+        $newPassword = (string) $data['new_password'];
+
+        foreach ($validator->validate($newPassword, Tools::passwordConstraints()) as $violation) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_VALIDATION,
+                $violation->getMessage(),
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
+        }
+
+        if ($passwordHasher->isPasswordValid($user, $newPassword)) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_VALIDATION,
+                'New password must be different from the current password.',
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
+        }
+
+        $user->setPassword($passwordHasher->hashPassword($user, $newPassword));
+        // Force re-OTP on the next login and end other sessions after a credential change.
+        $user->setLastOtpAt(null);
+        $userRepository->save($user, true);
+        $refreshTokenService->revokeAllForUser($user);
+
+        $userLogService->log(
+            UserLogType::PASSWORD_CHANGE,
+            'Password changed',
+            $user->getUserIdentifier(),
+            $request->headers->get('User-Agent'),
+            $request->getClientIp(),
+        );
+
+        return new JsonResponse(null, Response::HTTP_NO_CONTENT);
     }
 
     #[Route(

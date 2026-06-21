@@ -29,6 +29,7 @@ class UserLogType
     public const string EMAIL_VERIFICATION = 'email_verification';
     public const string PASSWORD_RESET_REQUEST = 'password_reset_request';
     public const string PASSWORD_RESET = 'password_reset';
+    public const string PASSWORD_CHANGE = 'password_change';
     public const string PROFILE_UPDATE = 'profile_update';
     public const string PURCHASE_INITIATED = 'purchase_initiated';
     public const string PAYMENT_COMPLETED = 'payment_completed';

@@ -15,12 +15,14 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 class VerificationService
 {
     public const int CODE_TTL_MINUTES = 15;
+    public const int LOGIN_OTP_TTL_MINUTES = 5;
 
     public function __construct(
         private readonly VerificationCodeRepository $verificationCodeRepository,
         private readonly UserRepository $userRepository,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly NotificationService $notificationService,
+        private readonly RefreshTokenService $refreshTokenService,
     ) {
     }
 
@@ -105,12 +107,41 @@ class VerificationService
         }
 
         $user->setPassword($this->passwordHasher->hashPassword($user, $newPassword));
+        // A reset replaces a possibly-compromised credential: drop the OTP trust
+        // window so the next login re-verifies, and revoke existing sessions.
+        $user->setLastOtpAt(null);
         $this->userRepository->save($user, true);
+        $this->refreshTokenService->revokeAllForUser($user);
 
         return true;
     }
 
-    private function issueCode(User $user, VerificationPurpose $purpose): string
+    /**
+     * Issues and emails a login OTP (second factor). The caller is expected to
+     * have already verified the password.
+     */
+    public function requestLoginOtp(User $user): void
+    {
+        $code = $this->issueCode($user, VerificationPurpose::LoginOtp, self::LOGIN_OTP_TTL_MINUTES);
+
+        $this->notificationService->createEmailNotification(
+            [$user->getEmail()],
+            'Your Africademy login code',
+            'email/login_otp.html.twig',
+            [
+                'first_name' => $user->getProfile()->getFirstName(),
+                'code' => $code,
+                'ttl_minutes' => self::LOGIN_OTP_TTL_MINUTES,
+            ],
+        );
+    }
+
+    public function verifyLoginOtp(User $user, string $code): bool
+    {
+        return $this->consumeCode($user, VerificationPurpose::LoginOtp, $code);
+    }
+
+    private function issueCode(User $user, VerificationPurpose $purpose, int $ttlMinutes = self::CODE_TTL_MINUTES): string
     {
         $this->verificationCodeRepository->invalidateActive($user, $purpose);
 
@@ -120,7 +151,7 @@ class VerificationService
         $verificationCode->setUser($user);
         $verificationCode->setPurpose($purpose);
         $verificationCode->setCodeHash(password_hash($plainCode, PASSWORD_BCRYPT));
-        $verificationCode->setExpiresAt(new DateTime(sprintf('+%d minutes', self::CODE_TTL_MINUTES)));
+        $verificationCode->setExpiresAt(new DateTime(sprintf('+%d minutes', $ttlMinutes)));
         $this->verificationCodeRepository->save($verificationCode, true);
 
         return $plainCode;
@@ -134,7 +165,20 @@ class VerificationService
             return false;
         }
 
+        // Burn the code after too many wrong guesses so a short-lived 6-digit
+        // code cannot be brute-forced within its TTL.
+        if ($verificationCode->hasReachedMaxAttempts()) {
+            $verificationCode->setUsedAt(new DateTime());
+            $this->verificationCodeRepository->save($verificationCode, true);
+
+            return false;
+        }
+
+        $verificationCode->incrementAttempts();
+
         if (!password_verify($plainCode, $verificationCode->getCodeHash())) {
+            $this->verificationCodeRepository->save($verificationCode, true);
+
             return false;
         }
 

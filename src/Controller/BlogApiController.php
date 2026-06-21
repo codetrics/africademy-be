@@ -156,7 +156,7 @@ final class BlogApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
-    #[IsGranted('ROLE_TEACHER')]
+    #[IsGranted('ROLE_FACILITATOR')]
     public function create(
         Request $request,
         BlogService $blogService,
@@ -205,7 +205,7 @@ final class BlogApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_PATCH],
     )]
-    #[IsGranted('ROLE_TEACHER')]
+    #[IsGranted('ROLE_FACILITATOR')]
     public function update(
         Request $request,
         BlogService $blogService,
@@ -253,7 +253,7 @@ final class BlogApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
-    #[IsGranted('ROLE_TEACHER')]
+    #[IsGranted('ROLE_FACILITATOR')]
     public function publish(
         Request $request,
         BlogService $blogService,
@@ -282,7 +282,7 @@ final class BlogApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
-    #[IsGranted('ROLE_TEACHER')]
+    #[IsGranted('ROLE_FACILITATOR')]
     public function unpublish(
         Request $request,
         BlogService $blogService,
@@ -311,7 +311,7 @@ final class BlogApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_DELETE],
     )]
-    #[IsGranted('ROLE_TEACHER')]
+    #[IsGranted('ROLE_FACILITATOR')]
     public function delete(
         Request $request,
         BlogService $blogService,
@@ -336,7 +336,7 @@ final class BlogApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
-    #[IsGranted('ROLE_TEACHER')]
+    #[IsGranted('ROLE_FACILITATOR')]
     public function uploadCover(
         Request $request,
         BlogService $blogService,

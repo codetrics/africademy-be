@@ -16,10 +16,10 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 final class AuthVerificationApiController extends AbstractController
 {
-    private const int MINIMUM_PASSWORD_LENGTH = 8;
 
     #[Route(
         '/api/{version}/auth/verify-email/request',
@@ -127,6 +127,7 @@ final class AuthVerificationApiController extends AbstractController
         VerificationService $verificationService,
         UserLogService $userLogService,
         RateLimiterFactoryInterface $verificationLimiter,
+        ValidatorInterface $validator,
     ): JsonResponse {
         $rateLimited = $this->enforceRateLimit($request, $verificationLimiter);
         if ($rateLimited instanceof JsonResponse) {
@@ -138,10 +139,10 @@ final class AuthVerificationApiController extends AbstractController
             return $data;
         }
 
-        if (strlen((string) $data['password']) < self::MINIMUM_PASSWORD_LENGTH) {
+        foreach ($validator->validate((string) $data['password'], Tools::passwordConstraints()) as $violation) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_VALIDATION,
-                sprintf('Password must be at least %d characters long.', self::MINIMUM_PASSWORD_LENGTH),
+                $violation->getMessage(),
                 Response::HTTP_UNPROCESSABLE_ENTITY,
             );
         }
