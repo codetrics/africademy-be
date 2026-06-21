@@ -18,7 +18,11 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 - User profiles (separate from auth identity) with avatar upload + streamed delivery.
 - Email verification (OTP) and password reset, rate-limited.
 - Audit logging (`UserLog`) and queued email notifications.
-- Roles: `ROLE_STUDENT` (default), `ROLE_TEACHER` (authors courses), `ROLE_ADMIN`.
+- Sign-up `account_type` (`student` / `teacher`); teacher accounts are created
+  pending admin approval and cannot log in until approved (admin approve/reject
+  queues a decision email).
+- Roles: `ROLE_USER` (base, always present) plus grantable/revokeable
+  `ROLE_STUDENT`, `ROLE_TEACHER` (authors courses) and `ROLE_ADMIN`.
 
 **Catalogue & learning**
 - Courses, lessons, and categories; paginated catalogue with search/level/category filters.
@@ -46,18 +50,21 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Admin & operations**
 - Analytics dashboard (users, revenue, MRR, subscriptions, enrollments, top courses).
-- Student directory and a `UserLog`-backed activity feed.
+- Student directory, teacher directory with approve/reject of pending teachers
+  (each queues a decision email), and a `UserLog`-backed activity feed.
 - Segmented email campaigns queued through the notification pipeline.
 
 ---
 
 ## Key flows
 
-**Authentication** — `POST /auth/register` creates a user + profile (no token) →
-`POST /auth/verify-email/request` then `/auth/verify-email` (OTP) → `POST /auth/login`
-returns a JWT access token + refresh token → `POST /auth/refresh` exchanges the
-refresh token for a new access token. Password reset is request + confirm; sensitive
-endpoints are rate-limited.
+**Authentication** — `POST /auth/register` creates a user + profile (no token),
+taking an `account_type` of `student` or `teacher` — students are active
+immediately, teachers are created pending admin approval and cannot log in until
+approved → `POST /auth/verify-email/request` then `/auth/verify-email` (OTP) →
+`POST /auth/login` returns a JWT access token + refresh token → `POST /auth/refresh`
+exchanges the refresh token for a new access token. Password reset is request +
+confirm; sensitive endpoints are rate-limited.
 
 **Authoring (teacher)** — create a course → add lessons (and upload a video per
 lesson) → publish. Course/lesson edits and video upload are gated to the owner (or
@@ -199,7 +206,7 @@ curl http://localhost:8000/health        # => {"status":"ok"}
 ```bash
 bin/console debug:router                 # List routes
 bin/console doctrine:migrations:migrate  # Apply migrations
-bin/console app:user:grant-role <email> ROLE_TEACHER   # Grant a role
+bin/console app:user:grant-role <email> ROLE_TEACHER   # Grant a role (add --revoke to revoke)
 bin/console app:docs-user:create <username>            # Provision the Swagger UI login
 bin/console cache:clear
 vendor/bin/phpstan analyse               # Static analysis (level 5)
