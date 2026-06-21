@@ -15,6 +15,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 class VerificationService
 {
     public const int CODE_TTL_MINUTES = 15;
+    public const int LOGIN_OTP_TTL_MINUTES = 5;
 
     public function __construct(
         private readonly VerificationCodeRepository $verificationCodeRepository,
@@ -110,7 +111,32 @@ class VerificationService
         return true;
     }
 
-    private function issueCode(User $user, VerificationPurpose $purpose): string
+    /**
+     * Issues and emails a login OTP (second factor). The caller is expected to
+     * have already verified the password.
+     */
+    public function requestLoginOtp(User $user): void
+    {
+        $code = $this->issueCode($user, VerificationPurpose::LoginOtp, self::LOGIN_OTP_TTL_MINUTES);
+
+        $this->notificationService->createEmailNotification(
+            [$user->getEmail()],
+            'Your Africademy login code',
+            'email/login_otp.html.twig',
+            [
+                'first_name' => $user->getProfile()->getFirstName(),
+                'code' => $code,
+                'ttl_minutes' => self::LOGIN_OTP_TTL_MINUTES,
+            ],
+        );
+    }
+
+    public function verifyLoginOtp(User $user, string $code): bool
+    {
+        return $this->consumeCode($user, VerificationPurpose::LoginOtp, $code);
+    }
+
+    private function issueCode(User $user, VerificationPurpose $purpose, int $ttlMinutes = self::CODE_TTL_MINUTES): string
     {
         $this->verificationCodeRepository->invalidateActive($user, $purpose);
 
@@ -120,7 +146,7 @@ class VerificationService
         $verificationCode->setUser($user);
         $verificationCode->setPurpose($purpose);
         $verificationCode->setCodeHash(password_hash($plainCode, PASSWORD_BCRYPT));
-        $verificationCode->setExpiresAt(new DateTime(sprintf('+%d minutes', self::CODE_TTL_MINUTES)));
+        $verificationCode->setExpiresAt(new DateTime(sprintf('+%d minutes', $ttlMinutes)));
         $this->verificationCodeRepository->save($verificationCode, true);
 
         return $plainCode;

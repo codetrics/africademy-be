@@ -45,7 +45,7 @@ security:
                 check_path: api_auth_login
                 username_path: email
                 password_path: password
-                success_handler: lexik_jwt_authentication.handler.authentication_success
+                success_handler: App\Security\OtpLoginSuccessHandler
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
             refresh_jwt:
                 check_path: api_auth_refresh
