@@ -105,6 +105,22 @@ tags:
       description: >
         Registration, login (JWT access + refresh), token refresh, email verification (OTP),
         and password reset. Public — no token required. Register returns no token; log in afterwards.
+    - name: Public
+      description: >
+        Anonymous, read-only catalogue for visitors who have not signed in — courses, bundles,
+        subscription plans/prices, and categories under `/api/v1/public/*`. **No token required.**
+
+
+        Only **published** courses/bundles and **active** plans are returned. Responses are
+        serialized with the `public` group, an explicit allowlist of non-sensitive fields, so
+        anonymous callers never receive internal data (timestamps, owner identity, draft state,
+        or any user PII). The authenticated equivalents (tags **Courses**, **Bundles**,
+        **Subscription**) return the full payload and support the write operations.
+
+
+        Detail endpoints are addressed by **slug** (e.g. `GET /public/courses/{slug}`) for SEO;
+        these endpoints are exempt from the email-verification gate and are covered by the
+        standard anonymous rate limit (60 requests/minute per IP).
     - name: Profile
       description: >
         The authenticated user's profile (separate from auth identity): name, bio, locale,
