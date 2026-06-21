@@ -82,14 +82,14 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     }
 
     /**
-     * Admin teacher directory: users holding ROLE_TEACHER, newest first, with an
+     * Admin facilitator directory: users holding ROLE_FACILITATOR, newest first, with an
      * optional free-text search and an optional account-status filter.
      */
-    public function createTeacherQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
+    public function createFacilitatorQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
     {
         $queryBuilder = $this->createAdminQueryBuilder($search, $status)
-            ->andWhere('appUser.roles LIKE :teacherRole')
-            ->setParameter('teacherRole', '%"' . User::ROLE_TEACHER . '"%');
+            ->andWhere('appUser.roles LIKE :facilitatorRole')
+            ->setParameter('facilitatorRole', '%"' . User::ROLE_FACILITATOR . '"%');
 
         return $queryBuilder;
     }

@@ -12,7 +12,7 @@ use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
- * Blocks authentication for accounts that are not active. Teachers stay pending
+ * Blocks authentication for accounts that are not active. Facilitators stay pending
  * until an admin approves them; rejected and suspended accounts cannot log in.
  */
 final class UserChecker implements UserCheckerInterface

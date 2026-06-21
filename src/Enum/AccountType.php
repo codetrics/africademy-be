@@ -7,5 +7,5 @@ namespace App\Enum;
 enum AccountType: string
 {
     case Student = 'student';
-    case Teacher = 'teacher';
+    case Facilitator = 'facilitator';
 }

@@ -70,7 +70,7 @@ final class CourseApiController extends AbstractController
             return $this->paginatedCoursesResponse([], 0, $page, $limit, $serializerService);
         }
 
-        $owner = $this->isGranted(User::ROLE_TEACHER) ? $user : null;
+        $owner = $this->isGranted(User::ROLE_FACILITATOR) ? $user : null;
         $queryBuilder = $courseRepository->createCatalogQueryBuilder($category, $level, $search, $owner);
 
         $pagination = $paginator->paginate($queryBuilder, $page, $limit);
@@ -94,7 +94,7 @@ final class CourseApiController extends AbstractController
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
-    #[IsGranted(User::ROLE_TEACHER)]
+    #[IsGranted(User::ROLE_FACILITATOR)]
     public function create(
         Request $request,
         CategoryRepository $categoryRepository,
