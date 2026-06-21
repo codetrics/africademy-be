@@ -18,10 +18,15 @@ info:
            pending admin approval and cannot log in until approved.
         2. `POST /auth/verify-email/request` then `POST /auth/verify-email` — verify the
            email with the OTP (some actions require a verified email).
-        3. `POST /auth/login` — returns a JWT **access token** (TTL ~1h) and a
-           **refresh token** (TTL ~30d).
-        4. Send `Authorization: Bearer <access_token>` on every authenticated request.
-        5. `POST /auth/refresh` — exchange the refresh token for a new access token.
+        3. `POST /auth/login` (email + password) — login uses **mandatory email OTP**.
+           Returns `otp_pending: true` plus a short-lived `pre_auth_token` (an OTP is emailed),
+           unless the account is within its **2-day OTP trust window**, in which case the JWT
+           **access token** (TTL ~1h) and **refresh token** (TTL ~30d) are returned directly.
+        4. `POST /auth/login/otp/verify` — exchange the `pre_auth_token` + emailed code for the
+           access + refresh tokens (`/auth/login/otp/request` resends the code). A successful OTP
+           trusts the account for 2 days.
+        5. Send `Authorization: Bearer <access_token>` on every authenticated request.
+        6. `POST /auth/refresh` — exchange the refresh token for a new access token.
 
         The issued JWT payload carries the user's ULID as the `id` claim. Token failures
         return a specific `401`: **expired** ("Token expired."), **invalid** ("Invalid
@@ -200,12 +205,14 @@ paths:
     /auth/login:
         post:
             tags: [Auth]
-            summary: Authenticate and obtain tokens
+            summary: Authenticate (password) — step 1 of OTP login
             description: >
-                Returns a JWT access token and a refresh token. Public endpoint. Non-active accounts
-                are rejected with `401` and a specific message: pending teachers ("Your account is
-                pending review."), rejected teachers ("Your account application was rejected."), and
-                suspended accounts ("Your account has been suspended.").
+                Verifies the password (first factor). Login uses mandatory email OTP, so the response
+                depends on `otp_pending`: when `true`, an OTP has been emailed and a short-lived
+                `pre_auth_token` is returned — exchange it at `/auth/login/otp/verify`. When `false`
+                (the account is within its 2-day OTP trust window), the real `token` and
+                `refresh_token` are returned directly. Public endpoint. Non-active accounts are
+                rejected with `401` and a specific message (pending review / rejected / suspended).
             security: []
             requestBody:
                 required: true
@@ -219,6 +226,35 @@ paths:
                                 password: { type: string, format: password, example: s3cretpass }
             responses:
                 '200':
+                    description: Password accepted — OTP required, or tokens issued if within the trust window
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    otp_pending: { type: boolean, description: 'When true, complete the OTP step' }
+                                    pre_auth_token: { type: string, description: Present when otp_pending=true; exchange at /auth/login/otp/verify (TTL 5m) }
+                                    token: { type: string, description: Present when otp_pending=false; JWT access token (TTL 1h) }
+                                    refresh_token: { type: string, description: Present when otp_pending=false; refresh token (TTL 30d) }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /auth/login/otp/verify:
+        post:
+            tags: [Auth]
+            summary: Verify login OTP — step 2 of OTP login
+            description: Exchanges a pre_auth_token and the emailed 6-digit code for the real access and refresh tokens. A successful verification trusts the account for 2 days. Public endpoint.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [pre_auth_token, code]
+                            properties:
+                                pre_auth_token: { type: string }
+                                code: { type: string, example: '462529' }
+            responses:
+                '200':
                     description: Authenticated
                     content:
                         application/json:
@@ -227,10 +263,29 @@ paths:
                                 properties:
                                     token: { type: string, description: JWT access token (TTL 1h) }
                                     refresh_token: { type: string, description: Refresh token (TTL 30d) }
-                            example:
-                                token: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3...
-                                refresh_token: 9c1f0e...d2b7
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
+    /auth/login/otp/request:
+        post:
+            tags: [Auth]
+            summary: Resend login OTP
+            description: Re-issues and emails a fresh login OTP for the pre_auth_token. Public endpoint, throttled.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [pre_auth_token]
+                            properties:
+                                pre_auth_token: { type: string }
+            responses:
+                '204': { description: Code re-sent }
+                '400': { $ref: '#/components/responses/BadRequest' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                '429': { $ref: '#/components/responses/RateLimited' }
     /auth/refresh:
         post:
             tags: [Auth]

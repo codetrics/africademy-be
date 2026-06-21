@@ -93,6 +93,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Type("DateTime<'U'>")]
     private ?DateTime $emailVerifiedAt = null;
 
+    #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
+    private ?DateTime $lastOtpAt = null;
+
     public function __construct()
     {
         $this->publicId = new Ulid();
@@ -241,6 +244,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function isEmailVerified(): bool
     {
         return !is_null($this->emailVerifiedAt);
+    }
+
+    public function getLastOtpAt(): ?DateTime
+    {
+        return $this->lastOtpAt;
+    }
+
+    public function setLastOtpAt(?DateTime $lastOtpAt): static
+    {
+        $this->lastOtpAt = $lastOtpAt;
+        return $this;
     }
 
     /**

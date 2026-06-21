@@ -7,6 +7,7 @@ namespace App\EventSubscriber;
 use App\Entity\User;
 use App\Exceptions\JsonExceptionResponse;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTCreatedEvent;
+use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTDecodedEvent;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTExpiredEvent;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTInvalidEvent;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTNotFoundEvent;
@@ -25,10 +26,22 @@ class JWTExceptionSubscriber implements EventSubscriberInterface
     {
         return [
             Events::JWT_CREATED => 'onJWTCreated',
+            Events::JWT_DECODED => 'onJWTDecoded',
             Events::JWT_EXPIRED => 'onJWTExpired',
             Events::JWT_INVALID => 'onJWTInvalid',
             Events::JWT_NOT_FOUND => 'onJWTNotFound',
         ];
+    }
+
+    /**
+     * Rejects pre-auth tokens (carrying otp_pending) on the API firewall so a
+     * half-finished login cannot be used as a real access token.
+     */
+    public function onJWTDecoded(JWTDecodedEvent $event): void
+    {
+        if (($event->getPayload()['otp_pending'] ?? false) === true) {
+            $event->markAsInvalid();
+        }
     }
 
     public function onJWTExpired(JWTExpiredEvent $event): void
