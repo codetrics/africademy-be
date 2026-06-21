@@ -16,6 +16,7 @@ class JsonExceptionResponse extends JsonResponse
     public const string ERROR_PAYMENT_REQUIRED = 'payment_required';
     public const string ERROR_RATE_LIMIT_EXCEEDED = 'rate_limit_exceeded';
     public const string ERROR_UNAUTHORIZED = 'unauthorized';
+    public const string ERROR_EMAIL_NOT_VERIFIED = 'email_not_verified';
     public const string ERROR_INTERNAL_SERVER_ERROR = 'internal_server_error';
 
     public function __construct(string $error, string $errorDescription, int $statusCode = self::HTTP_BAD_REQUEST)

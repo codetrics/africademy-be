@@ -23,5 +23,9 @@ services:
     App\:
         resource: '../src/'
 
+    # Expose the firewall access map so the email-verification gate can tell
+    # which routes are PUBLIC_ACCESS (and skip them) without duplicating the list.
+    Symfony\Component\Security\Http\AccessMapInterface: '@security.access_map'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

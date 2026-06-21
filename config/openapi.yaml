@@ -17,7 +17,7 @@ info:
            `account_type` (`student` or `facilitator`) is required; facilitators are created
            pending admin approval and cannot log in until approved.
         2. `POST /auth/verify-email/request` then `POST /auth/verify-email` — verify the
-           email with the OTP (some actions require a verified email).
+           email with the OTP. **Required before using the API** (see the gate below).
         3. `POST /auth/login` — returns a JWT **access token** (TTL ~1h) and a
            **refresh token** (TTL ~30d).
         4. Send `Authorization: Bearer <access_token>` on every authenticated request.
@@ -27,6 +27,11 @@ info:
         return a specific `401`: **expired** ("Token expired."), **invalid** ("Invalid
         token."), or **missing** ("Authentication required."). A logged-in user without the
         required role/ownership gets `403`.
+
+        **Email verification gate:** after login, authenticated `/api` requests return
+        `403 { "error": "email_not_verified" }` until the user verifies their email. Exempt:
+        all **public** endpoints (auth, blog reads, newsletter, certificate verification),
+        `GET /profile` (so the client can complete verification), and `ROLE_ADMIN` accounts.
 
         Roles are hierarchical: `ROLE_USER` ⊂ `ROLE_STUDENT` ⊂ `ROLE_FACILITATOR` ⊂ `ROLE_ADMIN`.
         Every account carries the base `ROLE_USER`; `ROLE_STUDENT`, `ROLE_FACILITATOR` and `ROLE_ADMIN`
@@ -2910,6 +2915,11 @@ components:
                     schema: { $ref: '#/components/schemas/Error' }
         Forbidden:
             description: Authenticated but not permitted (e.g. not the owner, or missing ROLE_FACILITATOR)
+            content:
+                application/json:
+                    schema: { $ref: '#/components/schemas/Error' }
+        EmailNotVerified:
+            description: 'Authenticated but email not yet verified (error: email_not_verified)'
             content:
                 application/json:
                     schema: { $ref: '#/components/schemas/Error' }
