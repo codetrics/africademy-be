@@ -62,7 +62,8 @@ info:
         - **Money:** amounts are integer **cents** with an ISO currency (ZAR).
         - **Rate limiting:** all anonymous (unauthenticated) requests are capped at **60/minute per IP**;
           sensitive flows are stricter (registration / email-verification / password-reset / newsletter:
-          **5 per 15 minutes**, login: **5 per 15 minutes**). Community writes (post/comment/like/upload)
+          **5 per 15 minutes**, login: **5 per 15 minutes**; login-OTP resend: **3 per 15 minutes**,
+          login-OTP verify: **5 per 15 minutes**). Community writes (post/comment/like/upload)
           are capped at **20/minute per user**. Exceeding a limit returns `429 rate_limit_exceeded`.
 
         ### Error envelope

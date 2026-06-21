@@ -15,8 +15,19 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Accounts & identity**
 - JWT authentication with refresh tokens (stateless `api` firewall).
+- **Two-step login with mandatory email OTP** — password is the first factor, a
+  6-digit emailed code the second. A successful OTP trusts the account for **2 days**
+  (subsequent logins skip the code) until a credential change.
+- **Email verification required** — after login, API access is gated until the user
+  verifies their email (`403 email_not_verified`); public endpoints, `GET /profile`,
+  and admins are exempt.
 - User profiles (separate from auth identity) with avatar upload + streamed delivery.
-- Email verification (OTP) and password reset, rate-limited.
+- Email verification (OTP), password reset, and **in-session password change**
+  (`POST /profile/password`); all passwords are length- and **breach-checked**
+  (Pwned Passwords k-anonymity).
+- A password change/reset **revokes existing sessions** (refresh tokens) and re-arms
+  the OTP step on the next login.
+- **Welcome emails on signup** (students; facilitators receive a pending-approval notice).
 - Audit logging (`UserLog`) and queued email notifications.
 - Sign-up `account_type` (`student` / `facilitator`); facilitator accounts are created
   pending admin approval and cannot log in until approved (admin approve/reject
@@ -58,13 +69,18 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 ## Key flows
 
-**Authentication** — `POST /auth/register` creates a user + profile (no token),
-taking an `account_type` of `student` or `facilitator` — students are active
-immediately, facilitators are created pending admin approval and cannot log in until
-approved → `POST /auth/verify-email/request` then `/auth/verify-email` (OTP) →
-`POST /auth/login` returns a JWT access token + refresh token → `POST /auth/refresh`
-exchanges the refresh token for a new access token. Password reset is request +
-confirm; sensitive endpoints are rate-limited.
+**Authentication** — `POST /auth/register` (with `account_type` `student` or
+`facilitator`) creates the account and queues a welcome email; students are active
+immediately, facilitators stay pending admin approval. The email must be verified
+(`POST /auth/verify-email/request` then `/auth/verify-email`) before the API is
+usable. **Login is two-step**: `POST /auth/login` (email + password) returns
+`otp_pending: true` and a short-lived `pre_auth_token` while emailing a 6-digit code —
+unless the account is within its 2-day OTP trust window, in which case the JWT access
+token + refresh token are returned directly. `POST /auth/login/otp/verify` exchanges
+the code for the tokens (`/auth/login/otp/request` resends), and `POST /auth/refresh`
+rotates the access token. Password reset is request + confirm; logged-in users change
+their password at `POST /profile/password`. All passwords are breach-checked, and a
+change/reset revokes other sessions. Sensitive endpoints are rate-limited.
 
 **Authoring (facilitator)** — create a course → add lessons (and upload a video per
 lesson) → publish. Course/lesson edits and video upload are gated to the owner (or
