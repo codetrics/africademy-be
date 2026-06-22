@@ -74,14 +74,19 @@ class RefundService
 
             $order = $refundRequest->getOrder();
 
+            // A paid order must carry a gateway payment reference; without one we
+            // cannot move money, so never silently mark it refunded.
+            if (is_null($order->getPfPaymentId())) {
+                $this->entityManager->rollback();
+                throw OrderException::refundNotCharged();
+            }
+
             // Issue the gateway refund first; only revoke access once the money is
             // actually returned. A failure leaves everything pending and retriable.
-            if (!is_null($order->getPfPaymentId())) {
-                $result = $this->payFastService->refund($order->getPfPaymentId(), $order->getAmount()->getAmountCents());
-                if ($result['status'] !== 'success') {
-                    $this->entityManager->rollback();
-                    throw OrderException::refundGatewayFailed();
-                }
+            $result = $this->payFastService->refund($order->getPfPaymentId(), $order->getAmount()->getAmountCents());
+            if ($result['status'] !== 'success') {
+                $this->entityManager->rollback();
+                throw OrderException::refundGatewayFailed();
             }
 
             foreach ($order->getPurchasedCourses() as $course) {

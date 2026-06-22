@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Entity\Subscription;
 use App\Entity\SubscriptionPayment;
+use App\Enum\SubscriptionPaymentStatus;
+use DateTime;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -39,5 +42,18 @@ class SubscriptionPaymentRepository extends ServiceEntityRepository
         if ($flush) {
             $this->getEntityManager()->flush();
         }
+    }
+
+    /**
+     * Whether a successful payment already covers the given period start — used
+     * to keep renewal idempotent if a subscription is picked up more than once.
+     */
+    public function existsPaidForPeriod(Subscription $subscription, DateTime $periodStart): bool
+    {
+        return !is_null($this->findOneBy([
+            'subscription' => $subscription,
+            'periodStart' => $periodStart,
+            'status' => SubscriptionPaymentStatus::Paid,
+        ]));
     }
 }

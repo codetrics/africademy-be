@@ -124,10 +124,12 @@ class AdminAnalyticsService
             ],
         )->fetchAllAssociative();
 
-        return array_map(
+        $mapped = array_map(
             static fn (array $row): array => ['bucket' => (string) $row['bucket'], 'amount_cents' => (int) $row['amount_cents']],
             $rows,
         );
+
+        return $this->fillSeriesGaps($mapped, $from, $to, $interval, 'amount_cents');
     }
 
     /**
@@ -150,10 +152,45 @@ class AdminAnalyticsService
             ],
         )->fetchAllAssociative();
 
-        return array_map(
+        $mapped = array_map(
             static fn (array $row): array => ['bucket' => (string) $row['bucket'], 'count' => (int) $row['total']],
             $rows,
         );
+
+        return $this->fillSeriesGaps($mapped, $from, $to, $interval, 'count');
+    }
+
+    /**
+     * Fills empty buckets across the full [from, to] range with a zero value so
+     * the series is continuous (charts don't gap-collapse periods with no data).
+     *
+     * @param array<int, array<string, mixed>> $rows
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function fillSeriesGaps(array $rows, DateTime $from, DateTime $to, string $interval, string $valueKey): array
+    {
+        $byBucket = [];
+        foreach ($rows as $row) {
+            $byBucket[(string) $row['bucket']] = $row[$valueKey];
+        }
+
+        $format = $interval === 'month' ? 'Y-m' : 'Y-m-d';
+        $step = $interval === 'month' ? '+1 month' : '+1 day';
+
+        $cursor = $interval === 'month'
+            ? new DateTime($from->format('Y-m-01'))
+            : new DateTime($from->format('Y-m-d'));
+        $end = clone $to;
+
+        $series = [];
+        while ($cursor <= $end) {
+            $bucket = $cursor->format($format);
+            $series[] = ['bucket' => $bucket, $valueKey => $byBucket[$bucket] ?? 0];
+            $cursor = new DateTime($cursor->format('Y-m-d H:i:s'))->modify($step);
+        }
+
+        return $series;
     }
 
     /**

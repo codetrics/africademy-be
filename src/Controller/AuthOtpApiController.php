@@ -21,7 +21,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class AuthOtpApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/public/auth/login/otp/verify',
+        '/api/{version}/auth/login/otp/verify',
         name: 'api_auth_login_otp_verify',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -33,20 +33,25 @@ final class AuthOtpApiController extends AbstractController
         UserLogService $userLogService,
         RateLimiterFactoryInterface $loginOtpVerifyLimiter,
     ): JsonResponse {
-        if (!$loginOtpVerifyLimiter->create($request->getClientIp())->consume()->isAccepted()) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_RATE_LIMIT_EXCEEDED,
-                'Too many attempts. Please request a new code and try again later.',
-                Response::HTTP_TOO_MANY_REQUESTS,
-            );
-        }
-
         $data = json_decode($request->getContent(), true);
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_INVALID_JSON,
                 'Invalid JSON payload',
                 Response::HTTP_BAD_REQUEST,
+            );
+        }
+
+        $preAuthToken = (string) ($data['pre_auth_token'] ?? '');
+
+        // Scope the brute-force limiter per email+IP (not IP alone) so attempts on
+        // one account cannot consume another account's budget.
+        $limiterKey = ($otpLoginService->peekEmail($preAuthToken) ?? 'anonymous') . '|' . $request->getClientIp();
+        if (!$loginOtpVerifyLimiter->create($limiterKey)->consume()->isAccepted()) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_RATE_LIMIT_EXCEEDED,
+                'Too many attempts. Please request a new code and try again later.',
+                Response::HTTP_TOO_MANY_REQUESTS,
             );
         }
 
@@ -60,7 +65,7 @@ final class AuthOtpApiController extends AbstractController
             );
         }
 
-        $result = $otpLoginService->completeOtp((string) $data['pre_auth_token'], (string) $data['code']);
+        $result = $otpLoginService->completeOtp($preAuthToken, (string) $data['code']);
 
         if (is_null($result)) {
             return new JsonExceptionResponse(
@@ -84,7 +89,7 @@ final class AuthOtpApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/public/auth/login/otp/request',
+        '/api/{version}/auth/login/otp/request',
         name: 'api_auth_login_otp_request',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -95,20 +100,25 @@ final class AuthOtpApiController extends AbstractController
         OtpLoginService $otpLoginService,
         RateLimiterFactoryInterface $loginOtpRequestLimiter,
     ): JsonResponse {
-        if (!$loginOtpRequestLimiter->create($request->getClientIp())->consume()->isAccepted()) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_RATE_LIMIT_EXCEEDED,
-                'Too many code requests. Please wait a few minutes and try again.',
-                Response::HTTP_TOO_MANY_REQUESTS,
-            );
-        }
-
         $data = json_decode($request->getContent(), true);
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_INVALID_JSON,
                 'Invalid JSON payload',
                 Response::HTTP_BAD_REQUEST,
+            );
+        }
+
+        $preAuthToken = (string) ($data['pre_auth_token'] ?? '');
+
+        // Scope the resend limiter per email+IP so one account's resends cannot
+        // exhaust another account's budget (and to throttle per-victim flooding).
+        $limiterKey = ($otpLoginService->peekEmail($preAuthToken) ?? 'anonymous') . '|' . $request->getClientIp();
+        if (!$loginOtpRequestLimiter->create($limiterKey)->consume()->isAccepted()) {
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_RATE_LIMIT_EXCEEDED,
+                'Too many code requests. Please wait a few minutes and try again.',
+                Response::HTTP_TOO_MANY_REQUESTS,
             );
         }
 
@@ -122,7 +132,7 @@ final class AuthOtpApiController extends AbstractController
             );
         }
 
-        if (!$otpLoginService->resendOtp((string) $data['pre_auth_token'])) {
+        if (!$otpLoginService->resendOtp($preAuthToken)) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_UNAUTHORIZED,
                 'Pre-authentication token is invalid or has expired. Please sign in again.',

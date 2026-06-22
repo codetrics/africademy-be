@@ -50,6 +50,25 @@ class SubscriptionRepository extends ServiceEntityRepository
         return $this->findOneBy(['user' => $user, 'status' => SubscriptionStatus::Active]);
     }
 
+    /**
+     * An Active subscription whose current period has not yet ended — the gate
+     * for subscription-based access (an Active row past its period that the
+     * billing job hasn't expired yet must NOT grant free access).
+     */
+    public function findActiveByUserWithinPeriod(User $user): ?Subscription
+    {
+        return $this->createQueryBuilder('subscription')
+            ->where('subscription.user = :user')
+            ->andWhere('subscription.status = :status')
+            ->andWhere('subscription.currentPeriodEnd >= :now')
+            ->setParameter('user', $user)
+            ->setParameter('status', SubscriptionStatus::Active)
+            ->setParameter('now', new DateTime())
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     public function findCurrentByUser(User $user): ?Subscription
     {
         return $this->findOneBy(['user' => $user], ['id' => 'DESC']);

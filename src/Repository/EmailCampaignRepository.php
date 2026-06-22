@@ -8,8 +8,10 @@ use App\Entity\EmailCampaign;
 use App\Enum\EmailCampaignStatus;
 use DateTime;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
+use Exception;
 use Symfony\Component\Uid\Ulid;
 
 /**
@@ -62,16 +64,33 @@ class EmailCampaignRepository extends ServiceEntityRepository
      */
     public function markSentIfDraft(EmailCampaign $campaign, int $recipientCount, DateTime $sentAt): bool
     {
-        if ($campaign->getStatus() !== EmailCampaignStatus::Draft) {
-            return false;
+        $entityManager = $this->getEntityManager();
+        $entityManager->beginTransaction();
+
+        try {
+            // Lock the row and re-check status under the lock so two concurrent
+            // /send requests cannot both transition Draft -> Sent (which would fan
+            // out the whole segment twice).
+            $campaign = $entityManager->find(EmailCampaign::class, $campaign->getId(), LockMode::PESSIMISTIC_WRITE);
+
+            if (!$campaign instanceof EmailCampaign || $campaign->getStatus() !== EmailCampaignStatus::Draft) {
+                $entityManager->commit();
+
+                return false;
+            }
+
+            $campaign->setStatus(EmailCampaignStatus::Sent)
+                ->setRecipientCount($recipientCount)
+                ->setSentAt($sentAt);
+
+            $entityManager->flush();
+            $entityManager->commit();
+
+            return true;
+        } catch (Exception $exception) {
+            $entityManager->rollback();
+
+            throw $exception;
         }
-
-        $campaign->setStatus(EmailCampaignStatus::Sent)
-            ->setRecipientCount($recipientCount)
-            ->setSentAt($sentAt);
-
-        $this->getEntityManager()->flush();
-
-        return true;
     }
 }

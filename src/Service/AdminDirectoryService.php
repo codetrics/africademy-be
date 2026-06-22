@@ -38,7 +38,18 @@ class AdminDirectoryService
 
     public function findStudent(Ulid $publicId): ?User
     {
-        return $this->userRepository->findOneByPublicId($publicId);
+        $user = $this->userRepository->findOneByPublicId($publicId);
+
+        // Scope the student directory to learners — a facilitator/admin looked up
+        // by ULID is not a "student" and must not be returned here.
+        if (!$user instanceof User
+            || in_array(User::ROLE_FACILITATOR, $user->getRawRoles(), true)
+            || in_array(User::ROLE_ADMIN, $user->getRawRoles(), true)
+        ) {
+            return null;
+        }
+
+        return $user;
     }
 
     public function facilitatorsQueryBuilder(?string $search, ?UserStatus $status): QueryBuilder
@@ -48,7 +59,15 @@ class AdminDirectoryService
 
     public function findFacilitator(Ulid $publicId): ?User
     {
-        return $this->userRepository->findOneByPublicId($publicId);
+        $user = $this->userRepository->findOneByPublicId($publicId);
+
+        // Only actual facilitators are actionable by the facilitator directory /
+        // approve-reject flow.
+        if (!$user instanceof User || !in_array(User::ROLE_FACILITATOR, $user->getRawRoles(), true)) {
+            return null;
+        }
+
+        return $user;
     }
 
     /**

@@ -25,20 +25,16 @@ final class Schedule implements ScheduleProviderInterface
             ->stateful($this->cache)
             ->processOnlyLastMissedRun(true)
             ->add(
-                RecurringMessage::cron(
-                    '0 3 * * *',
-                    new RunCommandMessage('cache:clear --env=prod --no-debug'),
-                ),
                 RecurringMessage::every(
-                    '1 minute',
+                    '1 minute', // Every minute
                     new RunCommandMessage('app:notifications:run'),
                 ),
                 RecurringMessage::cron(
-                    '0 4 * * *',
+                    '0 4 * * *', // Every day at 04:00
                     new RunCommandMessage('app:subscriptions:bill'),
                 ),
                 RecurringMessage::cron(
-                    '30 3 * * *',
+                    '30 3 * * *', // Every day at 03:30
                     new RunCommandMessage('app:payfast:prune-webhook-events'),
                 ),
             );

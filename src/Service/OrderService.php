@@ -15,6 +15,8 @@ use App\Enum\CourseStatus;
 use App\Enum\EntitlementSource;
 use App\Enum\OrderStatus;
 use App\Enum\PayfastWebhookOutcome;
+use App\Enum\RefundStatus;
+use App\Exceptions\CouponException;
 use App\Exceptions\OrderException;
 use App\Repository\BundleRepository;
 use App\Repository\CourseRepository;
@@ -93,6 +95,13 @@ class OrderService
         }
 
         $coupon = $this->couponService->validate($couponCode, $user, $original);
+
+        // Block a second concurrent pending order reusing the same coupon, which
+        // would let the user bank the discount twice before either completes.
+        if ($this->orderRepository->findPendingByUserAndCoupon($user, $coupon) instanceof Order) {
+            throw CouponException::alreadyRedeemed();
+        }
+
         $discount = $this->couponService->computeDiscount($coupon, $original);
 
         $order->setCoupon($coupon);
@@ -130,8 +139,27 @@ class OrderService
             throw OrderException::notRefundable();
         }
 
-        if (!is_null($this->refundRequestRepository->findOneByOrder($order))) {
-            throw OrderException::refundAlreadyRequested();
+        $existingRequest = $this->refundRequestRepository->findOneByOrder($order);
+        if ($existingRequest instanceof RefundRequest) {
+            // A pending or already-approved request blocks a new one; a previously
+            // rejected request is re-opened (still within the refund window).
+            if ($existingRequest->getStatus() !== RefundStatus::Rejected) {
+                throw OrderException::refundAlreadyRequested();
+            }
+
+            $existingRequest->setStatus(RefundStatus::Pending);
+            $existingRequest->setResolvedAt(null);
+            $existingRequest->setReason($reason);
+            $this->refundRequestRepository->save($existingRequest, true);
+
+            $this->userLogService->log(
+                UserLogType::REFUND_REQUESTED,
+                'Refund requested',
+                $user->getEmail(),
+                context: ['order' => (string) $order->getPublicId()],
+            );
+
+            return $existingRequest;
         }
 
         $refundRequest = new RefundRequest();
@@ -237,6 +265,8 @@ class OrderService
             !$order instanceof Order => PayfastWebhookOutcome::Unmatched,
             $paymentStatus !== 'COMPLETE' => PayfastWebhookOutcome::NotComplete,
             $paidCents !== $order->getAmount()->getAmountCents() => PayfastWebhookOutcome::AmountMismatch,
+            // PayFast settles in ZAR only — a non-ZAR order can't be a valid payment.
+            $order->getAmount()->getCurrency() !== 'ZAR' => PayfastWebhookOutcome::AmountMismatch,
             $order->isPaid() => PayfastWebhookOutcome::Duplicate,
             default => PayfastWebhookOutcome::OrderCompleted,
         };

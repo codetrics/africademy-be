@@ -23,6 +23,16 @@ class PayFastService
 {
     private const string SANDBOX_PROCESS_URL = 'https://sandbox.payfast.co.za/eng/process';
     private const string LIVE_PROCESS_URL = 'https://www.payfast.co.za/eng/process';
+    private const string SANDBOX_VALIDATE_URL = 'https://sandbox.payfast.co.za/eng/query/validate';
+    private const string LIVE_VALIDATE_URL = 'https://www.payfast.co.za/eng/query/validate';
+
+    /** PayFast ITN source hosts — resolved to IPs for the inbound allowlist. */
+    private const array ITN_SOURCE_HOSTS = [
+        'www.payfast.co.za',
+        'w1w.payfast.co.za',
+        'w2w.payfast.co.za',
+        'sandbox.payfast.co.za',
+    ];
     private const string API_BASE_URL = 'https://api.payfast.co.za';
     private const string API_VERSION = 'v1';
     private const int ITEM_NAME_MAX_LENGTH = 100;
@@ -39,6 +49,7 @@ class PayFastService
         #[Autowire('%app.payfast.notify_url%')] private readonly string $notifyUrl,
         private readonly HttpClientInterface $httpClient,
         private readonly LoggerInterface $logger,
+        #[Autowire('%kernel.environment%')] private readonly string $environment,
     ) {
     }
 
@@ -130,6 +141,62 @@ class PayFastService
         unset($data['signature']);
 
         return hash_equals($this->generateSignature($data), $signature);
+    }
+
+    /**
+     * Confirms the request originates from a PayFast ITN host. Defence-in-depth
+     * on top of the signature so a forged payload from an arbitrary source is
+     * rejected even if the passphrase were ever misconfigured. Skipped in tests.
+     */
+    public function isValidSourceIp(?string $ip): bool
+    {
+        if ($this->environment === 'test') {
+            return true;
+        }
+
+        if (is_null($ip) || $ip === '') {
+            return false;
+        }
+
+        $allowed = [];
+        foreach (self::ITN_SOURCE_HOSTS as $host) {
+            $resolved = gethostbynamel($host);
+            if ($resolved !== false) {
+                $allowed = array_merge($allowed, $resolved);
+            }
+        }
+
+        return in_array($ip, array_unique($allowed), true);
+    }
+
+    /**
+     * PayFast's server confirmation step: posts the received ITN back to PayFast
+     * and requires a VALID response. This proves the notification really came
+     * from PayFast (an attacker cannot make PayFast confirm a payment that never
+     * happened), independent of the signature/passphrase. Skipped in tests.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function serverValidateItn(array $data): bool
+    {
+        if ($this->environment === 'test') {
+            return true;
+        }
+
+        $url = $this->sandbox ? self::SANDBOX_VALIDATE_URL : self::LIVE_VALIDATE_URL;
+
+        try {
+            $content = $this->httpClient->request('POST', $url, [
+                'headers' => ['Content-Type' => 'application/x-www-form-urlencoded'],
+                'body' => http_build_query($data),
+            ])->getContent(false);
+        } catch (Throwable $exception) {
+            $this->logger->error('PayFast ITN server validation request failed', ['error' => $exception->getMessage()]);
+
+            return false;
+        }
+
+        return trim((string) strtok(trim($content), "\n")) === 'VALID';
     }
 
     /**

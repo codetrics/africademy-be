@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Entity\Coupon;
 use App\Entity\Order;
 use App\Entity\User;
 use App\Enum\OrderStatus;
@@ -54,6 +55,11 @@ class OrderRepository extends ServiceEntityRepository
     public function findOneByPublicIdAndUser(Ulid $publicId, User $user): ?Order
     {
         return $this->findOneBy(['publicId' => $publicId, 'user' => $user]);
+    }
+
+    public function findPendingByUserAndCoupon(User $user, Coupon $coupon): ?Order
+    {
+        return $this->findOneBy(['user' => $user, 'coupon' => $coupon, 'status' => OrderStatus::Pending]);
     }
 
     public function createUserOrdersQueryBuilder(User $user): QueryBuilder

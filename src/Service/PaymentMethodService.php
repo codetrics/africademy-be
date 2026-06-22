@@ -12,6 +12,8 @@ use App\Enum\PayfastWebhookOutcome;
 use App\Exceptions\PaymentMethodException;
 use App\Repository\PaymentMethodRepository;
 use App\Repository\UserRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Ulid;
 
@@ -25,6 +27,7 @@ class PaymentMethodService
         private readonly UserLogService $userLogService,
         private readonly PayfastWebhookRecorder $payfastWebhookRecorder,
         private readonly LoggerInterface $payfastLogger,
+        private readonly EntityManagerInterface $entityManager,
     ) {
     }
 
@@ -44,17 +47,15 @@ class PaymentMethodService
      */
     public function handleTokenizationItn(array $data): bool
     {
-        if ((string) ($data['custom_str1'] ?? '') !== PayFastService::TOKENIZATION_MARKER) {
+        // Validate the signature BEFORE claiming the ITN: an invalid signature
+        // must not be swallowed as "handled" (which would drop a real order ITN).
+        if (!$this->payFastService->validateItn($data)) {
             return false;
         }
 
-        if (!$this->payFastService->validateItn($data)) {
-            // Invalid signatures are logged for debugging but never stored.
-            $this->payfastLogger->warning('PayFast tokenization ITN rejected: invalid signature', [
-                'm_payment_id' => (string) ($data['m_payment_id'] ?? ''),
-            ]);
-
-            return true;
+        // Valid signature but not a tokenization ITN — defer to the order handler.
+        if ((string) ($data['custom_str1'] ?? '') !== PayFastService::TOKENIZATION_MARKER) {
+            return false;
         }
 
         $this->payfastWebhookRecorder->record($data, PayfastWebhookOutcome::Tokenization);
@@ -124,15 +125,27 @@ class PaymentMethodService
     {
         $paymentMethod = $this->resolve($user, $publicId);
 
-        foreach ($this->paymentMethodRepository->findActiveByUser($user) as $existing) {
-            if ($existing->isDefault() && $existing->getId() !== $paymentMethod->getId()) {
-                $existing->setIsDefault(false);
-                $this->paymentMethodRepository->save($existing);
+        // Clear the old default and set the new one atomically so a failure can't
+        // leave the user with zero or two default cards.
+        $this->entityManager->beginTransaction();
+        try {
+            foreach ($this->paymentMethodRepository->findActiveByUser($user) as $existing) {
+                if ($existing->isDefault() && $existing->getId() !== $paymentMethod->getId()) {
+                    $existing->setIsDefault(false);
+                    $this->paymentMethodRepository->save($existing);
+                }
             }
-        }
 
-        $paymentMethod->setIsDefault(true);
-        $this->paymentMethodRepository->save($paymentMethod, true);
+            $paymentMethod->setIsDefault(true);
+            $this->paymentMethodRepository->save($paymentMethod);
+
+            $this->entityManager->flush();
+            $this->entityManager->commit();
+        } catch (Exception $exception) {
+            $this->entityManager->rollback();
+
+            throw $exception;
+        }
 
         $this->userLogService->log(
             UserLogType::PAYMENT_METHOD_DEFAULT,
@@ -152,17 +165,32 @@ class PaymentMethodService
         $paymentMethod = $this->resolve($user, $publicId);
         $wasDefault = $paymentMethod->isDefault();
 
-        $paymentMethod->setStatus(PaymentMethodStatus::Deleted);
-        $paymentMethod->setIsDefault(false);
-        $this->paymentMethodRepository->save($paymentMethod, true);
+        // Snapshot the other active cards before deactivating this one (the query
+        // is status-based, so it must run before the card is flushed as deleted).
+        $others = array_values(array_filter(
+            $this->paymentMethodRepository->findActiveByUser($user),
+            static fn (PaymentMethod $candidate): bool => $candidate->getId() !== $paymentMethod->getId(),
+        ));
 
-        // Promote another card to default when the default was removed.
-        if ($wasDefault) {
-            $remaining = $this->paymentMethodRepository->findActiveByUser($user);
-            if ($remaining !== []) {
-                $remaining[0]->setIsDefault(true);
-                $this->paymentMethodRepository->save($remaining[0], true);
+        // Deactivate the card and promote a replacement default atomically.
+        $this->entityManager->beginTransaction();
+        try {
+            $paymentMethod->setStatus(PaymentMethodStatus::Deleted);
+            $paymentMethod->setIsDefault(false);
+            $this->paymentMethodRepository->save($paymentMethod);
+
+            // Promote another card to default when the default was removed.
+            if ($wasDefault && $others !== []) {
+                $others[0]->setIsDefault(true);
+                $this->paymentMethodRepository->save($others[0]);
             }
+
+            $this->entityManager->flush();
+            $this->entityManager->commit();
+        } catch (Exception $exception) {
+            $this->entityManager->rollback();
+
+            throw $exception;
         }
 
         $this->userLogService->log(

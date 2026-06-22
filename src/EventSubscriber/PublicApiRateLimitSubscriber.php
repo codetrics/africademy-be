@@ -10,24 +10,30 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
- * Applies a baseline per-IP rate limit to anonymous /api requests — i.e. every
- * public endpoint (auth, blog reads, newsletter, certificate verification).
- * Authenticated (Bearer) requests are skipped here; they are bounded per-user by
- * their own controllers. Stricter per-feature limiters still stack on top.
+ * Applies a baseline per-IP rate limit to anonymous /api requests — every public
+ * endpoint (auth, blog reads, newsletter, certificate verification). Runs AFTER
+ * the firewall so the decision is based on the actual authenticated user, not a
+ * (spoofable) Authorization header: genuinely authenticated requests are skipped
+ * (bounded per-user by their own controllers); everything else is capped here.
+ * Stricter per-feature limiters still stack on top.
  */
 class PublicApiRateLimitSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private readonly RateLimiterFactoryInterface $publicApiLimiter,
+        private readonly TokenStorageInterface $tokenStorage,
     ) {
     }
 
     public static function getSubscribedEvents(): array
     {
+        // Priority 6 — below the firewall (8) so the security token is populated.
         return [
-            KernelEvents::REQUEST => ['onKernelRequest', 20],
+            KernelEvents::REQUEST => ['onKernelRequest', 6],
         ];
     }
 
@@ -43,8 +49,11 @@ class PublicApiRateLimitSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Authenticated requests carry a bearer token and are limited per-user elsewhere.
-        if (str_starts_with((string) $request->headers->get('Authorization'), 'Bearer ')) {
+        // Genuinely authenticated requests are bounded per-user elsewhere. A
+        // spoofed/invalid token never reaches here authenticated — the firewall
+        // rejects it — so anonymous traffic (incl. fake bearers that fall through)
+        // is capped.
+        if ($this->tokenStorage->getToken()?->getUser() instanceof UserInterface) {
             return;
         }
 

@@ -16,7 +16,6 @@ use JMS\Serializer\Annotation\Expose;
 use JMS\Serializer\Annotation\SerializedName;
 use JMS\Serializer\Annotation\Type;
 use JMS\Serializer\Annotation\VirtualProperty;
-use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Uid\Ulid;
@@ -25,7 +24,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ExclusionPolicy(policy: 'all')]
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: 'users')]
-#[UniqueEntity(fields: ['email'], message: 'This email address is already registered.')]
+// Email uniqueness is enforced by the DB unique index + RegistrationService
+// (which returns null on a duplicate). No UniqueEntity constraint here, so the
+// registration endpoint cannot be used to enumerate existing accounts.
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     public const string ROLE_DEFAULT = 'ROLE_USER';

@@ -17,6 +17,7 @@ use App\Repository\SubscriptionPaymentRepository;
 use App\Repository\SubscriptionPlanRepository;
 use App\Repository\SubscriptionRepository;
 use DateTime;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Psr\Log\LoggerInterface;
@@ -72,10 +73,6 @@ class SubscriptionService
             throw SubscriptionException::paymentMethodNotFound();
         }
 
-        if (!is_null($this->subscriptionRepository->findActiveByUser($user))) {
-            throw SubscriptionException::alreadySubscribed();
-        }
-
         $token = $this->tokenCipher->decrypt($paymentMethod->getToken());
         if (is_null($token)) {
             throw SubscriptionException::chargeFailed();
@@ -89,65 +86,84 @@ class SubscriptionService
         $discount = is_null($coupon) ? 0 : $this->couponService->computeDiscount($coupon, $fullAmount);
         $chargeAmount = $fullAmount - $discount;
 
-        $charge = $this->payFastService->chargeToken($token, $chargeAmount, $plan->getName());
-        if ($charge['status'] !== 'success') {
-            throw SubscriptionException::chargeFailed();
-        }
-
         $periodStart = new DateTime();
         $periodEnd = (clone $periodStart)->modify($plan->getInterval()->modifier());
 
-        $subscription = new Subscription();
-        $subscription->setUser($user);
-        $subscription->setPlan($plan);
-        $subscription->setPaymentMethod($paymentMethod);
-        $subscription->setStatus(SubscriptionStatus::Active);
-        $subscription->setCurrentPeriodStart($periodStart);
-        $subscription->setCurrentPeriodEnd($periodEnd);
-
-        $payment = new SubscriptionPayment();
-        $payment->setSubscription($subscription);
-        $payment->setAmount(new Money($chargeAmount, $plan->getPrice()->getCurrency()));
-        $payment->setStatus(SubscriptionPaymentStatus::Paid);
-        $payment->setPeriodStart($periodStart);
-        $payment->setPeriodEnd($periodEnd);
-        $payment->setPfPaymentId($charge['pf_payment_id'] ?? null);
-        $payment->setGatewayResponse('success');
-
         $this->entityManager->beginTransaction();
         try {
-            $this->subscriptionRepository->save($subscription);
-            $this->subscriptionPaymentRepository->save($payment);
-            if (!is_null($coupon)) {
-                $this->couponService->redeem($coupon, $user, $discount, null, $subscription);
-            }
-            $this->entityManager->flush();
-            $this->entityManager->commit();
-        } catch (Exception $exception) {
-            $this->entityManager->rollback();
+            // Lock the user row so concurrent subscribe() calls for the same user
+            // serialise — there is no DB "one active subscription" constraint.
+            $this->entityManager->find(User::class, $user->getId(), LockMode::PESSIMISTIC_WRITE);
 
-            // The card was already charged; compensate so the user isn't billed
-            // for a subscription that was never recorded.
-            if (!is_null($charge['pf_payment_id'] ?? null)) {
-                $this->payFastService->refund((string) $charge['pf_payment_id'], $chargeAmount);
-                $this->logger->critical('Subscription persistence failed after a successful charge; issued a compensating refund.', [
-                    'user' => $user->getEmail(),
-                    'pf_payment_id' => $charge['pf_payment_id'],
-                    'error' => $exception->getMessage(),
-                ]);
+            if (!is_null($this->subscriptionRepository->findActiveByUser($user))) {
+                throw SubscriptionException::alreadySubscribed();
+            }
+
+            $charge = $this->payFastService->chargeToken($token, $chargeAmount, $plan->getName());
+            if ($charge['status'] !== 'success') {
+                throw SubscriptionException::chargeFailed();
+            }
+
+            $subscription = new Subscription();
+            $subscription->setUser($user);
+            $subscription->setPlan($plan);
+            $subscription->setPaymentMethod($paymentMethod);
+            $subscription->setStatus(SubscriptionStatus::Active);
+            $subscription->setCurrentPeriodStart($periodStart);
+            $subscription->setCurrentPeriodEnd($periodEnd);
+
+            $payment = new SubscriptionPayment();
+            $payment->setSubscription($subscription);
+            $payment->setAmount(new Money($chargeAmount, $plan->getPrice()->getCurrency()));
+            $payment->setStatus(SubscriptionPaymentStatus::Paid);
+            $payment->setPeriodStart($periodStart);
+            $payment->setPeriodEnd($periodEnd);
+            $payment->setPfPaymentId($charge['pf_payment_id'] ?? null);
+            $payment->setGatewayResponse('success');
+
+            try {
+                $this->subscriptionRepository->save($subscription);
+                $this->subscriptionPaymentRepository->save($payment);
+                if (!is_null($coupon)) {
+                    $this->couponService->redeem($coupon, $user, $discount, null, $subscription);
+                }
+                $this->entityManager->flush();
+                $this->entityManager->commit();
+            } catch (Exception $persistException) {
+                $this->entityManager->rollback();
+
+                // Charged but couldn't persist: compensate so the user isn't billed
+                // for a subscription that was never recorded.
+                $pfPaymentId = $charge['pf_payment_id'] ?? null;
+                if (!is_null($pfPaymentId)) {
+                    $this->payFastService->refund($pfPaymentId, $chargeAmount);
+                    $this->logger->critical('Subscription persistence failed after a successful charge; issued a compensating refund.', [
+                        'user' => $user->getEmail(),
+                        'pf_payment_id' => $pfPaymentId,
+                        'error' => $persistException->getMessage(),
+                    ]);
+                }
+
+                throw $persistException;
+            }
+
+            $this->userLogService->log(
+                UserLogType::SUBSCRIPTION_CREATED,
+                'Subscription created',
+                $user->getEmail(),
+                context: ['subscription' => (string) $subscription->getPublicId(), 'plan' => $plan->getSlug()],
+            );
+
+            return $subscription;
+        } catch (Exception $exception) {
+            // Unwind the outer transaction (user lock / check / charge) on any
+            // failure not already handled by the inner persist block.
+            if ($this->entityManager->getConnection()->isTransactionActive()) {
+                $this->entityManager->rollback();
             }
 
             throw $exception;
         }
-
-        $this->userLogService->log(
-            UserLogType::SUBSCRIPTION_CREATED,
-            'Subscription created',
-            $user->getEmail(),
-            context: ['subscription' => (string) $subscription->getPublicId(), 'plan' => $plan->getSlug()],
-        );
-
-        return $subscription;
     }
 
     /**
@@ -188,8 +204,16 @@ class SubscriptionService
         $processed = 0;
 
         foreach ($this->subscriptionRepository->findDueForRenewal(new DateTime()) as $subscription) {
-            $this->processRenewal($subscription);
-            $processed++;
+            try {
+                $this->processRenewal($subscription);
+                $processed++;
+            } catch (Throwable $exception) {
+                // Isolate failures so one bad subscription doesn't halt the batch.
+                $this->logger->error('Subscription renewal failed', [
+                    'subscription' => (string) $subscription->getPublicId(),
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
         return $processed;
@@ -207,6 +231,18 @@ class SubscriptionService
         $plan = $subscription->getPlan();
         $periodStart = clone $subscription->getCurrentPeriodEnd();
         $periodEnd = (clone $periodStart)->modify($plan->getInterval()->modifier());
+
+        // Idempotency: if a successful payment already covers this period (e.g. the
+        // subscription was picked up twice), advance without charging again.
+        if ($this->subscriptionPaymentRepository->existsPaidForPeriod($subscription, $periodStart)) {
+            $subscription->setStatus(SubscriptionStatus::Active);
+            $subscription->setCurrentPeriodStart($periodStart);
+            $subscription->setCurrentPeriodEnd($periodEnd);
+            $subscription->setFailedAttempts(0);
+            $this->subscriptionRepository->save($subscription, true);
+
+            return;
+        }
 
         $payment = new SubscriptionPayment();
         $payment->setSubscription($subscription);
@@ -254,6 +290,18 @@ class SubscriptionService
             $this->entityManager->commit();
         } catch (Exception $exception) {
             $this->entityManager->rollback();
+
+            // Charged but couldn't persist: refund so the customer isn't billed for
+            // a period that was never recorded (and won't be re-charged next run).
+            if ($succeeded && !is_null($pfPaymentId)) {
+                $this->payFastService->refund((string) $pfPaymentId, $plan->getPrice()->getAmountCents());
+                $this->logger->critical('Subscription renewal persistence failed after a successful charge; issued a compensating refund.', [
+                    'subscription' => (string) $subscription->getPublicId(),
+                    'pf_payment_id' => $pfPaymentId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
             throw $exception;
         }
 

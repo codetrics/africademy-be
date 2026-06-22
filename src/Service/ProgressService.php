@@ -12,6 +12,7 @@ use App\Enum\EnrollmentStatus;
 use App\Enum\LessonState;
 use App\Enum\LessonStatus;
 use App\Exceptions\EnrollmentException;
+use App\Repository\CertificateRepository;
 use App\Repository\CourseRepository;
 use App\Repository\EnrollmentRepository;
 use App\Repository\LessonProgressRepository;
@@ -31,6 +32,7 @@ class ProgressService
         private readonly LessonProgressRepository $lessonProgressRepository,
         private readonly AccessService $accessService,
         private readonly CertificateService $certificateService,
+        private readonly CertificateRepository $certificateRepository,
         private readonly EntityManagerInterface $entityManager,
     ) {
     }
@@ -163,6 +165,12 @@ class ProgressService
                 $enrollment->setCompletedAt(new DateTime());
             }
         } else {
+            // Never revert an enrollment that already earned a certificate —
+            // un-completing a lesson must not invalidate an issued certificate.
+            if (!is_null($this->certificateRepository->findOneByEnrollment($enrollment))) {
+                return;
+            }
+
             $enrollment->setStatus(EnrollmentStatus::InProgress);
             $enrollment->setCompletedAt(null);
         }

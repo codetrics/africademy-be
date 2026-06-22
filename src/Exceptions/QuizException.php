@@ -42,6 +42,11 @@ class QuizException extends Exception
         return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'You must be enrolled in the course to take its quiz.');
     }
 
+    public static function accessRequired(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_PAYMENT_REQUIRED, Response::HTTP_PAYMENT_REQUIRED, 'You need active access to this course to take its quiz.');
+    }
+
     public static function invalidDefinition(string $message): self
     {
         return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, $message);

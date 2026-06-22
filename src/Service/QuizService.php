@@ -10,11 +10,14 @@ use App\Entity\Question;
 use App\Entity\Quiz;
 use App\Entity\QuizAttempt;
 use App\Entity\User;
+use App\Enum\EnrollmentStatus;
 use App\Exceptions\QuizException;
 use App\Repository\CourseRepository;
 use App\Repository\EnrollmentRepository;
+use App\Repository\LessonRepository;
 use App\Repository\QuizAttemptRepository;
 use App\Repository\QuizRepository;
+use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Exception;
@@ -27,14 +30,17 @@ class QuizService
         private readonly QuizAttemptRepository $quizAttemptRepository,
         private readonly CourseRepository $courseRepository,
         private readonly EnrollmentRepository $enrollmentRepository,
+        private readonly LessonRepository $lessonRepository,
         private readonly CertificateService $certificateService,
+        private readonly AccessService $accessService,
         private readonly EntityManagerInterface $entityManager,
     ) {
     }
 
     /**
      * Replaces the course's quiz with the supplied definition in one transaction.
-     * Existing attempts are kept as historical records.
+     * Prior attempts are invalidated so an old passing attempt can't satisfy the
+     * certificate gate against the new questions.
      *
      * @param array<string, mixed> $payload
      *
@@ -44,7 +50,8 @@ class QuizService
     {
         $this->assertDefinition($payload);
 
-        $quiz = $this->quizRepository->findOneByCourse($course) ?? new Quiz()->setCourse($course);
+        $existingQuiz = $this->quizRepository->findOneByCourse($course);
+        $quiz = $existingQuiz ?? new Quiz()->setCourse($course);
         $quiz->setTitle((string) $payload['title']);
 
         if (array_key_exists('pass_threshold_percent', $payload)) {
@@ -72,6 +79,13 @@ class QuizService
 
         $this->entityManager->beginTransaction();
         try {
+            // Drop prior attempts for the quiz being replaced (no bulk DQL).
+            if ($existingQuiz instanceof Quiz) {
+                foreach ($this->quizAttemptRepository->findByQuiz($existingQuiz) as $attempt) {
+                    $this->quizAttemptRepository->remove($attempt);
+                }
+            }
+
             $this->quizRepository->save($quiz, true);
             $this->entityManager->commit();
         } catch (Exception $exception) {
@@ -83,11 +97,25 @@ class QuizService
     }
 
     /**
+     * The student take-view of a course's quiz. Requires the student to be
+     * enrolled and to still have access to the course.
+     *
      * @throws QuizException
      */
-    public function getForCourse(Ulid $coursePublicId): Quiz
+    public function getForCourse(User $student, Ulid $coursePublicId): Quiz
     {
-        return $this->resolveQuiz($this->resolveCourse($coursePublicId));
+        $course = $this->resolveCourse($coursePublicId);
+
+        $enrollment = $this->enrollmentRepository->findOneByStudentAndCourse($student, $course);
+        if (is_null($enrollment)) {
+            throw QuizException::notEnrolled();
+        }
+
+        if (!$this->accessService->hasAccess($student, $course)) {
+            throw QuizException::accessRequired();
+        }
+
+        return $this->resolveQuiz($course);
     }
 
     /**
@@ -106,6 +134,10 @@ class QuizService
         $enrollment = $this->enrollmentRepository->findOneByStudentAndCourse($student, $course);
         if (is_null($enrollment)) {
             throw QuizException::notEnrolled();
+        }
+
+        if (!$this->accessService->hasAccess($student, $course)) {
+            throw QuizException::accessRequired();
         }
 
         $questions = $quiz->getQuestions();
@@ -144,6 +176,16 @@ class QuizService
         $this->quizAttemptRepository->save($attempt, true);
 
         if ($passed) {
+            // A quiz-only course (no published lessons) is completed by passing
+            // the quiz, so the certificate gate (status = Completed) is satisfied.
+            if ($enrollment->getStatus() !== EnrollmentStatus::Completed
+                && count($this->lessonRepository->findPublishedByCourseOrdered($course)) === 0
+            ) {
+                $enrollment->setStatus(EnrollmentStatus::Completed);
+                $enrollment->setCompletedAt(new DateTime());
+                $this->enrollmentRepository->save($enrollment, true);
+            }
+
             $this->certificateService->issueForCompletedEnrollment($enrollment);
         }
 
