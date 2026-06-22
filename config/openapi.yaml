@@ -13,20 +13,20 @@ info:
         authenticated per-request with a JWT bearer token (no sessions/cookies).
 
         ### Authentication & roles
-        1. `POST /auth/register` — create a user + profile (returns **no** token). An
+        1. `POST /public/auth/register` — create a user + profile (returns **no** token). An
            `account_type` (`student` or `facilitator`) is required; facilitators are created
            pending admin approval and cannot log in until approved.
-        2. `POST /auth/verify-email/request` then `POST /auth/verify-email` — verify the
+        2. `POST /public/auth/verify-email/request` then `POST /public/auth/verify-email` — verify the
            email with the OTP. **Required before using the API** (see the gate below).
-        3. `POST /auth/login` (email + password) — login uses **mandatory email OTP**.
+        3. `POST /public/auth/login` (email + password) — login uses **mandatory email OTP**.
            Returns `otp_pending: true` plus a short-lived `pre_auth_token` (an OTP is emailed),
            unless the account is within its **2-day OTP trust window**, in which case the JWT
            **access token** (TTL ~1h) and **refresh token** (TTL ~30d) are returned directly.
-        4. `POST /auth/login/otp/verify` — exchange the `pre_auth_token` + emailed code for the
-           access + refresh tokens (`/auth/login/otp/request` resends the code). A successful OTP
+        4. `POST /public/auth/login/otp/verify` — exchange the `pre_auth_token` + emailed code for the
+           access + refresh tokens (`/public/auth/login/otp/request` resends the code). A successful OTP
            trusts the account for 2 days.
         5. Send `Authorization: Bearer <access_token>` on every authenticated request.
-        6. `POST /auth/refresh` — exchange the refresh token for a new access token.
+        6. `POST /public/auth/refresh` — exchange the refresh token for a new access token.
 
         The issued JWT payload carries the user's ULID as the `id` claim. Token failures
         return a specific `401`: **expired** ("Token expired."), **invalid** ("Invalid
@@ -44,15 +44,15 @@ info:
         posts they own (record-level checks via voters); admins manage coupons, refunds, blog
         categories, analytics, the student and facilitator directories, and email campaigns.
 
-        ### Public endpoints (no token)
-        - `POST /auth/*` (register, login, refresh, verify-email, password reset)
+        ### Public endpoints (no token) — all under `/public/*`
+        - `POST /public/auth/*` (register, login, refresh, verify-email, password reset, logout)
         - `GET /public/*` — anonymous catalogue (published courses & bundles, active plans,
           categories). Responses use the `public` serialization group, so only non-sensitive
           fields are returned; the equivalent authenticated endpoints return the full payload.
-        - `GET /blog/posts`, `GET /blog/posts/{slug}`, `GET /blog/categories`,
-          `GET /blog/posts/{id}/cover`
-        - `POST /newsletter/subscribe`, `GET /newsletter/unsubscribe`
-        - `GET /certificates/verify/{credentialId}` — public certificate verification
+        - `GET /public/blog/posts`, `GET /public/blog/posts/{slug}`, `GET /public/blog/categories`,
+          `GET /public/blog/posts/{id}/cover`
+        - `POST /public/newsletter/subscribe`, `GET /public/newsletter/unsubscribe`
+        - `GET /public/certificates/verify/{credentialId}` — public certificate verification
         - `GET /open-api/docs` — this documentation
 
         ### Conventions
@@ -307,7 +307,7 @@ paths:
                                     categories:
                                         type: array
                                         items: { $ref: '#/components/schemas/Category' }
-    /auth/register:
+    /public/auth/register:
         post:
             tags: [Auth]
             summary: Register a new user
@@ -343,14 +343,14 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /auth/login:
+    /public/auth/login:
         post:
             tags: [Auth]
             summary: Authenticate (password) — step 1 of OTP login
             description: >
                 Verifies the password (first factor). Login uses mandatory email OTP, so the response
                 depends on `otp_pending`: when `true`, an OTP has been emailed and a short-lived
-                `pre_auth_token` is returned — exchange it at `/auth/login/otp/verify`. When `false`
+                `pre_auth_token` is returned — exchange it at `/public/auth/login/otp/verify`. When `false`
                 (the account is within its 2-day OTP trust window), the real `token` and
                 `refresh_token` are returned directly. Public endpoint. Non-active accounts are
                 rejected with `401` and a specific message (pending review / rejected / suspended).
@@ -374,11 +374,11 @@ paths:
                                 type: object
                                 properties:
                                     otp_pending: { type: boolean, description: 'When true, complete the OTP step' }
-                                    pre_auth_token: { type: string, description: Present when otp_pending=true; exchange at /auth/login/otp/verify (TTL 5m) }
+                                    pre_auth_token: { type: string, description: Present when otp_pending=true; exchange at /public/auth/login/otp/verify (TTL 5m) }
                                     token: { type: string, description: Present when otp_pending=false; JWT access token (TTL 1h) }
                                     refresh_token: { type: string, description: Present when otp_pending=false; refresh token (TTL 30d) }
                 '401': { $ref: '#/components/responses/Unauthorized' }
-    /auth/login/otp/verify:
+    /public/auth/login/otp/verify:
         post:
             tags: [Auth]
             summary: Verify login OTP — step 2 of OTP login
@@ -407,7 +407,7 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /auth/login/otp/request:
+    /public/auth/login/otp/request:
         post:
             tags: [Auth]
             summary: Resend login OTP
@@ -427,7 +427,7 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /auth/refresh:
+    /public/auth/refresh:
         post:
             tags: [Auth]
             summary: Exchange a refresh token for a new access token
@@ -452,7 +452,7 @@ paths:
                                     token: { type: string }
                                     refresh_token: { type: string }
                 '401': { $ref: '#/components/responses/Unauthorized' }
-    /auth/logout:
+    /public/auth/logout:
         post:
             tags: [Auth]
             summary: Log out — revoke refresh token(s)
@@ -474,7 +474,7 @@ paths:
             responses:
                 '204': { description: Session(s) revoked }
                 '401': { $ref: '#/components/responses/Unauthorized' }
-    /auth/verify-email/request:
+    /public/auth/verify-email/request:
         post:
             tags: [Auth]
             summary: Request an email-verification code
@@ -493,7 +493,7 @@ paths:
                 '200': { description: Code sent if the email exists }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /auth/verify-email:
+    /public/auth/verify-email:
         post:
             tags: [Auth]
             summary: Verify an email with a code
@@ -514,7 +514,7 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /auth/password/forgot:
+    /public/auth/password/forgot:
         post:
             tags: [Auth]
             summary: Request a password-reset code
@@ -533,7 +533,7 @@ paths:
                 '200': { description: Code sent if the email exists }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /auth/password/reset:
+    /public/auth/password/reset:
         post:
             tags: [Auth]
             summary: Reset a password with a code
@@ -1247,7 +1247,7 @@ paths:
                         application/pdf:
                             schema: { type: string, format: binary }
                 '404': { $ref: '#/components/responses/NotFound' }
-    /certificates/verify/{credentialId}:
+    /public/certificates/verify/{credentialId}:
         get:
             tags: [Certificate]
             summary: Publicly verify a certificate by its credential ID
@@ -2224,7 +2224,7 @@ paths:
                 '204': { description: Comment deleted }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
-    /blog/posts:
+    /public/blog/posts:
         get:
             tags: [Blog]
             summary: List published blog posts (paginated)
@@ -2275,7 +2275,7 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
-    /blog/categories:
+    /public/blog/categories:
         get:
             tags: [Blog]
             summary: List blog categories
@@ -2292,7 +2292,7 @@ paths:
                                     categories:
                                         type: array
                                         items: { $ref: '#/components/schemas/BlogCategory' }
-    /blog/posts/{slug}:
+    /public/blog/posts/{slug}:
         parameters:
             - { name: slug, in: path, required: true, schema: { type: string }, description: Blog post slug }
         get:
@@ -2383,7 +2383,7 @@ paths:
                                     post: { $ref: '#/components/schemas/BlogPost' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
-    /blog/posts/{id}/cover:
+    /public/blog/posts/{id}/cover:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: Blog post ULID }
         get:
@@ -2483,7 +2483,7 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '409': { $ref: '#/components/responses/Conflict' }
-    /newsletter/subscribe:
+    /public/newsletter/subscribe:
         post:
             tags: [Newsletter]
             summary: Subscribe to the newsletter
@@ -2506,7 +2506,7 @@ paths:
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /newsletter/confirm:
+    /public/newsletter/confirm:
         get:
             tags: [Newsletter]
             summary: Confirm a newsletter subscription (double opt-in)
@@ -2518,7 +2518,7 @@ paths:
                 '200': { description: Subscription confirmed }
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '404': { $ref: '#/components/responses/NotFound' }
-    /newsletter/unsubscribe:
+    /public/newsletter/unsubscribe:
         get:
             tags: [Newsletter]
             summary: Unsubscribe via token

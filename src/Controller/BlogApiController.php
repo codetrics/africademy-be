@@ -30,7 +30,7 @@ use Symfony\Component\Uid\Ulid;
 final class BlogApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/blog/posts',
+        '/api/{version}/public/blog/posts',
         name: 'api_blog_post_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -72,7 +72,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/categories',
+        '/api/{version}/public/blog/categories',
         name: 'api_blog_category_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -89,7 +89,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts/{slug}',
+        '/api/{version}/public/blog/posts/{slug}',
         name: 'api_blog_post_get',
         requirements: ['_format' => 'json', 'version' => 'v1', 'slug' => '[a-z0-9-]+'],
         defaults: ['_format' => 'json'],
@@ -113,7 +113,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts/{id}/cover',
+        '/api/{version}/public/blog/posts/{id}/cover',
         name: 'api_blog_post_cover_get',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json', 'version' => 'v1'],

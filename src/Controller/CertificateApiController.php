@@ -81,7 +81,7 @@ final class CertificateApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/certificates/verify/{credentialId}',
+        '/api/{version}/public/certificates/verify/{credentialId}',
         name: 'api_certificate_verify',
         requirements: ['_format' => 'json', 'version' => 'v1', 'credentialId' => '[a-f0-9]{32}'],
         defaults: ['_format' => 'json'],
