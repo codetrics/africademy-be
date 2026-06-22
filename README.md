@@ -37,6 +37,9 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Catalogue & learning**
 - Courses, lessons, and categories; paginated catalogue with search/level/category filters.
+- **Course access split by audience:** students read published courses at `/courses`;
+  facilitators manage **only their own** courses at `/facilitator/courses`; admins view and
+  moderate (publish/unpublish/delete) **all** facilitators' courses at `/admin/courses`.
 - **Public catalogue** — anonymous `GET /api/v1/public/*` exposes published courses,
   bundles, active subscription plans, and categories. Responses are serialised with a
   JMS `public` group allowlist, so only non-sensitive fields are returned to anonymous
@@ -88,9 +91,11 @@ access token itself remains valid until it expires. Password reset is request + 
 logged-in users change their password at `POST /profile/password`. All passwords are
 breach-checked, and a change/reset revokes other sessions. Sensitive endpoints are rate-limited.
 
-**Authoring (facilitator)** — create a course → add lessons (and upload a video per
-lesson) → publish. Course/lesson edits and video upload are gated to the owner (or
-admin) via voters.
+**Authoring (facilitator)** — under `/facilitator/courses`: create a course → add lessons
+(and upload a video per lesson) → publish, all scoped to the facilitator as owner. Lesson
+and video edits remain under `/courses/{id}/lessons` and are gated to the owner (or admin)
+via the `CourseVoter`. Admins oversee all courses at `/admin/courses` (view + publish /
+unpublish / delete; content editing stays with the owner).
 
 **Access & purchase** — access to a course is decided by `AccessService`:
 - **Free** course → immediate access.

@@ -133,8 +133,13 @@ tags:
         filters, returning the full course payload. For anonymous browsing see the **Public** tag.
     - name: Courses
       description: >
-        Course CRUD for facilitators (own courses, record-level voter checks) and reads for students.
+        Student-facing course reads — published courses only (list + detail). Facilitators manage
+        their own courses under the **Facilitator** tag; admins oversee all under **Admin**.
         Courses carry pricing flags (free / purchasable / included-in-subscription) that feed the access gate.
+    - name: Facilitator
+      description: >
+        A facilitator's own courses (`/facilitator/courses`) — list (any status), create, view, update,
+        publish and delete, all scoped to the authenticated facilitator as owner. Requires ROLE_FACILITATOR.
     - name: Lessons
       description: >
         Lesson authoring within a course (owner only) and reads for students. Lessons may host a
@@ -680,8 +685,8 @@ paths:
     /courses:
         get:
             tags: [Courses]
-            summary: List courses (paginated)
-            description: Returns published courses. Facilitators also see their own drafts.
+            summary: List published courses (paginated)
+            description: Authenticated student catalogue — published courses only. Facilitators manage their own under /facilitator/courses; admins under /admin/courses.
             parameters:
                 - { name: page, in: query, schema: { type: integer, default: 1 } }
                 - { name: limit, in: query, schema: { type: integer, default: 10 } }
@@ -690,7 +695,7 @@ paths:
                 - { name: q, in: query, schema: { type: string }, description: Title search }
             responses:
                 '200':
-                    description: Paginated courses
+                    description: Paginated published courses
                     content:
                         application/json:
                             schema:
@@ -701,10 +706,48 @@ paths:
                                         items: { $ref: '#/components/schemas/Course' }
                                     pagination: { $ref: '#/components/schemas/Pagination' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
-        post:
+    /courses/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
             tags: [Courses]
-            summary: Create a course (draft)
-            description: Requires ROLE_FACILITATOR. The slug is generated from the title.
+            summary: Get a published course
+            responses:
+                '200':
+                    description: The course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /facilitator/courses:
+        get:
+            tags: [Facilitator]
+            summary: List my courses (paginated)
+            description: The authenticated facilitator's own courses, any status.
+            parameters:
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+                - { name: status, in: query, schema: { type: string, enum: [draft, published, archived] } }
+                - { name: q, in: query, schema: { type: string }, description: Title search }
+            responses:
+                '200':
+                    description: Paginated own courses
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    courses: { type: array, items: { $ref: '#/components/schemas/Course' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+        post:
+            tags: [Facilitator]
+            summary: Create a course (draft) — ROLE_FACILITATOR
+            description: Creates a course owned by the caller. The slug is generated from the title.
             requestBody:
                 required: true
                 content:
@@ -737,15 +780,14 @@ paths:
                                 type: object
                                 properties:
                                     course: { $ref: '#/components/schemas/Course' }
-                '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
-    /courses/{id}:
+    /facilitator/courses/{id}:
         parameters:
             - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
         get:
-            tags: [Courses]
-            summary: Get a course
+            tags: [Facilitator]
+            summary: Get my course (any status)
             responses:
                 '200':
                     description: The course
@@ -755,11 +797,11 @@ paths:
                                 type: object
                                 properties:
                                     course: { $ref: '#/components/schemas/Course' }
-                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
         patch:
-            tags: [Courses]
-            summary: Update a course (owner only)
+            tags: [Facilitator]
+            summary: Update my course
             requestBody:
                 required: true
                 content:
@@ -795,21 +837,103 @@ paths:
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
         delete:
-            tags: [Courses]
-            summary: Delete a course (owner only)
+            tags: [Facilitator]
+            summary: Delete my course
             responses:
                 '204': { description: Course deleted }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
-    /courses/{id}/publish:
+    /facilitator/courses/{id}/publish:
         post:
-            tags: [Courses]
-            summary: Publish a course (owner only)
+            tags: [Facilitator]
+            summary: Publish my course
             parameters:
                 - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
             responses:
                 '200':
                     description: Published course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/courses:
+        get:
+            tags: [Admin]
+            summary: List all courses (admin, paginated)
+            description: Every facilitator's courses, any status, with filters.
+            parameters:
+                - { name: q, in: query, schema: { type: string }, description: Title search }
+                - { name: status, in: query, schema: { type: string, enum: [draft, published, archived] } }
+                - { name: category, in: query, schema: { type: string }, description: Category slug }
+                - { name: owner, in: query, schema: { type: string }, description: Owner (facilitator) ULID }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: Paginated courses
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    courses: { type: array, items: { $ref: '#/components/schemas/Course' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/courses/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+        get:
+            tags: [Admin]
+            summary: Get any course (admin)
+            responses:
+                '200':
+                    description: The course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+        delete:
+            tags: [Admin]
+            summary: Delete any course (admin)
+            responses:
+                '204': { description: Course deleted }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/courses/{id}/publish:
+        post:
+            tags: [Admin]
+            summary: Publish any course (admin)
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '200':
+                    description: Published course
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    course: { $ref: '#/components/schemas/Course' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/courses/{id}/unpublish:
+        post:
+            tags: [Admin]
+            summary: Unpublish any course (admin) — back to draft
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string }, description: Course ULID }
+            responses:
+                '200':
+                    description: Unpublished course
                     content:
                         application/json:
                             schema:
