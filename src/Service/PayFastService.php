@@ -85,9 +85,11 @@ class PayFastService
             'm_payment_id' => $merchantPaymentId,
             'amount' => $this->formatAmount(self::SETUP_AMOUNT_CENTS),
             'item_name' => 'Card setup',
-            'subscription_type' => '2',
+            // PayFast signs fields in a fixed order: custom_str* must precede
+            // subscription_type, otherwise the generated signature is rejected.
             'custom_str1' => self::TOKENIZATION_MARKER,
             'custom_str2' => (string) $user->getPublicId(),
+            'subscription_type' => '2',
         ];
 
         $fields = $this->signFields($fields);
