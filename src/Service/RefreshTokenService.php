@@ -22,10 +22,34 @@ class RefreshTokenService
      */
     public function revokeAllForUser(User $user): void
     {
-        $this->entityManager->createQuery(
-            'DELETE FROM ' . RefreshToken::class . ' refreshToken WHERE refreshToken.username = :username',
-        )
-            ->setParameter('username', $user->getUserIdentifier())
-            ->execute();
+        $refreshTokens = $this->entityManager->getRepository(RefreshToken::class)
+            ->findBy(['username' => $user->getUserIdentifier()]);
+
+        foreach ($refreshTokens as $refreshToken) {
+            $this->entityManager->remove($refreshToken);
+        }
+
+        $this->entityManager->flush();
+    }
+
+    /**
+     * Revokes a single refresh token, but only if it belongs to the user (so one
+     * user cannot revoke another's session). Returns whether a token was deleted.
+     */
+    public function revokeForUser(User $user, string $refreshToken): bool
+    {
+        $token = $this->entityManager->getRepository(RefreshToken::class)->findOneBy([
+            'username' => $user->getUserIdentifier(),
+            'refreshToken' => $refreshToken,
+        ]);
+
+        if (!$token instanceof RefreshToken) {
+            return false;
+        }
+
+        $this->entityManager->remove($token);
+        $this->entityManager->flush();
+
+        return true;
     }
 }

@@ -9,10 +9,10 @@ use App\Entity\Course;
 use App\Entity\Money;
 use App\Entity\User;
 use App\Enum\CourseLevel;
+use App\Enum\CourseStatus;
 use App\Exceptions\JsonExceptionResponse;
 use App\Repository\CategoryRepository;
 use App\Repository\CourseRepository;
-use App\Security\Voter\CourseVoter;
 use App\Service\CourseService;
 use App\Service\Helper\Tools;
 use App\Service\ReturnType\PaginationReturnType;
@@ -29,67 +29,57 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Uid\Ulid;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
-final class CourseApiController extends AbstractController
+/**
+ * A facilitator's own courses — every action is scoped to the authenticated
+ * facilitator as owner; they can never see or manage another facilitator's
+ * courses (that is the admin's remit under /admin/courses).
+ */
+final class FacilitatorCourseApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/courses',
-        name: 'api_course_list',
+        '/api/{version}/facilitator/courses',
+        name: 'api_facilitator_course_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_GET],
     )]
-    #[IsGranted('ROLE_STUDENT')]
+    #[IsGranted(User::ROLE_FACILITATOR)]
     public function list(
         Request $request,
         CourseRepository $courseRepository,
-        CategoryRepository $categoryRepository,
         PaginatorInterface $paginator,
         SerializerService $serializerService,
     ): JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
             $exception = $this->createAccessDeniedException();
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_UNAUTHORIZED,
-                $exception->getMessage(),
-                Response::HTTP_UNAUTHORIZED,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_UNAUTHORIZED, $exception->getMessage(), Response::HTTP_UNAUTHORIZED);
         }
 
-        $page = $request->query->getInt('page', 1);
-        $limit = Tools::clampLimit($request->query->getInt('limit', 10));
-        $categorySlug = $request->query->getString('category');
-        $levelValue = $request->query->getString('level');
-        $search = $request->query->getString('q');
-
-        $category = $categorySlug !== '' ? $categoryRepository->findOneBySlug($categorySlug) : null;
-        $level = $levelValue !== '' ? CourseLevel::tryFrom($levelValue) : null;
-
-        // A filter that resolves to nothing yields an empty page rather than an unfiltered one.
-        if (($categorySlug !== '' && !$category instanceof Category) || ($levelValue !== '' && is_null($level))) {
-            return $this->paginatedCoursesResponse([], 0, $page, $limit, $serializerService);
+        $statusValue = $request->query->getString('status');
+        $status = $statusValue === '' ? null : CourseStatus::tryFrom($statusValue);
+        if ($statusValue !== '' && is_null($status)) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'Invalid status filter.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $owner = $this->isGranted(User::ROLE_FACILITATOR) ? $user : null;
-        $queryBuilder = $courseRepository->createCatalogQueryBuilder($category, $level, $search, $owner);
-
-        $pagination = $paginator->paginate($queryBuilder, $page, $limit);
-
-        $coursesJSON = $serializerService->serialize($pagination->getItems());
-        $paginationJSON = $serializerService->serialize(new PaginationReturnType($pagination));
+        $pagination = $paginator->paginate(
+            $courseRepository->createOwnedQueryBuilder($user, $status, $request->query->getString('q')),
+            $request->query->getInt('page', 1),
+            Tools::clampLimit($request->query->getInt('limit', 10)),
+        );
 
         $response = new JsonResponse();
         $response->setData([
-            'courses' => json_decode($coursesJSON),
-            'pagination' => json_decode($paginationJSON),
+            'courses' => json_decode($serializerService->serialize($pagination->getItems())),
+            'pagination' => json_decode($serializerService->serialize(new PaginationReturnType($pagination))),
         ]);
 
         return $response;
     }
 
     #[Route(
-        '/api/{version}/courses',
-        name: 'api_course_create',
+        '/api/{version}/facilitator/courses',
+        name: 'api_facilitator_course_create',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
@@ -105,39 +95,23 @@ final class CourseApiController extends AbstractController
         $user = $this->getUser();
         if (!$user instanceof User) {
             $exception = $this->createAccessDeniedException();
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_UNAUTHORIZED,
-                $exception->getMessage(),
-                Response::HTTP_UNAUTHORIZED,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_UNAUTHORIZED, $exception->getMessage(), Response::HTTP_UNAUTHORIZED);
         }
 
         $data = json_decode($request->getContent(), true);
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_INVALID_JSON,
-                'Invalid JSON payload',
-                Response::HTTP_BAD_REQUEST,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_JSON, 'Invalid JSON payload', Response::HTTP_BAD_REQUEST);
         }
 
         try {
             Tools::checkExpectedKeys(['title', 'category_id'], $data);
         } catch (Exception $exception) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_INVALID_REQUEST,
-                $exception->getMessage(),
-                Response::HTTP_BAD_REQUEST,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_REQUEST, $exception->getMessage(), Response::HTTP_BAD_REQUEST);
         }
 
         $category = $this->resolveCategory((string) $data['category_id'], $categoryRepository);
         if (!$category instanceof Category) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_VALIDATION,
-                'The selected category does not exist.',
-                Response::HTTP_UNPROCESSABLE_ENTITY,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'The selected category does not exist.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $course = new Course();
@@ -147,81 +121,55 @@ final class CourseApiController extends AbstractController
 
         $applyError = $this->applyWritableFields($course, $data);
         if (!is_null($applyError)) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_VALIDATION,
-                $applyError,
-                Response::HTTP_UNPROCESSABLE_ENTITY,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, $applyError, Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $violation = $this->firstViolation($course, $validator);
         if (!is_null($violation)) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_VALIDATION,
-                $violation,
-                Response::HTTP_UNPROCESSABLE_ENTITY,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, $violation, Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $courseService->create($course);
 
-        $courseJSON = $serializerService->serialize($course);
         $response = new JsonResponse();
-        $response->setData(['course' => json_decode($courseJSON)]);
+        $response->setData(['course' => json_decode($serializerService->serialize($course))]);
         $response->setStatusCode(Response::HTTP_CREATED);
 
         return $response;
     }
 
     #[Route(
-        '/api/{version}/courses/{id}',
-        name: 'api_course_get',
+        '/api/{version}/facilitator/courses/{id}',
+        name: 'api_facilitator_course_get',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_GET],
     )]
-    #[IsGranted('ROLE_STUDENT')]
+    #[IsGranted(User::ROLE_FACILITATOR)]
     public function get(
         Request $request,
         CourseRepository $courseRepository,
         SerializerService $serializerService,
     ): JsonResponse {
-        $user = $this->getUser();
-        if (!$user instanceof User) {
-            $exception = $this->createAccessDeniedException();
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_UNAUTHORIZED,
-                $exception->getMessage(),
-                Response::HTTP_UNAUTHORIZED,
-            );
+        $course = $this->ownedCourse($request, $courseRepository);
+        if (!$course instanceof Course) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Course not found', Response::HTTP_NOT_FOUND);
         }
 
-        $course = $courseRepository->findOneByPublicId(Ulid::fromString($request->attributes->getString('id')));
-
-        // Drafts are only visible to their owner; hide existence otherwise.
-        if (!$course instanceof Course || ($course->getStatus()->value !== 'published' && $course->getOwner()->getId() !== $user->getId())) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_NOT_FOUND,
-                'Course not found',
-                Response::HTTP_NOT_FOUND,
-            );
-        }
-
-        $courseJSON = $serializerService->serialize($course);
         $response = new JsonResponse();
-        $response->setData(['course' => json_decode($courseJSON)]);
+        $response->setData(['course' => json_decode($serializerService->serialize($course))]);
 
         return $response;
     }
 
     #[Route(
-        '/api/{version}/courses/{id}',
-        name: 'api_course_update',
+        '/api/{version}/facilitator/courses/{id}',
+        name: 'api_facilitator_course_update',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_PATCH],
     )]
-    #[IsGranted('ROLE_STUDENT')]
+    #[IsGranted(User::ROLE_FACILITATOR)]
     public function update(
         Request $request,
         CourseRepository $courseRepository,
@@ -230,34 +178,20 @@ final class CourseApiController extends AbstractController
         SerializerService $serializerService,
         ValidatorInterface $validator,
     ): JsonResponse {
-        $course = $courseRepository->findOneByPublicId(Ulid::fromString($request->attributes->getString('id')));
+        $course = $this->ownedCourse($request, $courseRepository);
         if (!$course instanceof Course) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_NOT_FOUND,
-                'Course not found',
-                Response::HTTP_NOT_FOUND,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Course not found', Response::HTTP_NOT_FOUND);
         }
-
-        $this->denyAccessUnlessGranted(CourseVoter::EDIT, $course);
 
         $data = json_decode($request->getContent(), true);
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_INVALID_JSON,
-                'Invalid JSON payload',
-                Response::HTTP_BAD_REQUEST,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_INVALID_JSON, 'Invalid JSON payload', Response::HTTP_BAD_REQUEST);
         }
 
         if (array_key_exists('category_id', $data)) {
             $category = $this->resolveCategory((string) $data['category_id'], $categoryRepository);
             if (!$category instanceof Category) {
-                return new JsonExceptionResponse(
-                    JsonExceptionResponse::ERROR_VALIDATION,
-                    'The selected category does not exist.',
-                    Response::HTTP_UNPROCESSABLE_ENTITY,
-                );
+                return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'The selected category does not exist.', Response::HTTP_UNPROCESSABLE_ENTITY);
             }
             $course->setCategory($category);
         }
@@ -268,92 +202,83 @@ final class CourseApiController extends AbstractController
 
         $applyError = $this->applyWritableFields($course, $data);
         if (!is_null($applyError)) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_VALIDATION,
-                $applyError,
-                Response::HTTP_UNPROCESSABLE_ENTITY,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, $applyError, Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $violation = $this->firstViolation($course, $validator);
         if (!is_null($violation)) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_VALIDATION,
-                $violation,
-                Response::HTTP_UNPROCESSABLE_ENTITY,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, $violation, Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $courseService->update($course);
 
-        $courseJSON = $serializerService->serialize($course);
         $response = new JsonResponse();
-        $response->setData(['course' => json_decode($courseJSON)]);
+        $response->setData(['course' => json_decode($serializerService->serialize($course))]);
 
         return $response;
     }
 
     #[Route(
-        '/api/{version}/courses/{id}/publish',
-        name: 'api_course_publish',
+        '/api/{version}/facilitator/courses/{id}/publish',
+        name: 'api_facilitator_course_publish',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_POST],
     )]
-    #[IsGranted('ROLE_STUDENT')]
+    #[IsGranted(User::ROLE_FACILITATOR)]
     public function publish(
         Request $request,
         CourseRepository $courseRepository,
         CourseService $courseService,
         SerializerService $serializerService,
     ): JsonResponse {
-        $course = $courseRepository->findOneByPublicId(Ulid::fromString($request->attributes->getString('id')));
+        $course = $this->ownedCourse($request, $courseRepository);
         if (!$course instanceof Course) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_NOT_FOUND,
-                'Course not found',
-                Response::HTTP_NOT_FOUND,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Course not found', Response::HTTP_NOT_FOUND);
         }
-
-        $this->denyAccessUnlessGranted(CourseVoter::PUBLISH, $course);
 
         $courseService->publish($course);
 
-        $courseJSON = $serializerService->serialize($course);
         $response = new JsonResponse();
-        $response->setData(['course' => json_decode($courseJSON)]);
+        $response->setData(['course' => json_decode($serializerService->serialize($course))]);
 
         return $response;
     }
 
     #[Route(
-        '/api/{version}/courses/{id}',
-        name: 'api_course_delete',
+        '/api/{version}/facilitator/courses/{id}',
+        name: 'api_facilitator_course_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
         methods: [Request::METHOD_DELETE],
     )]
-    #[IsGranted('ROLE_STUDENT')]
+    #[IsGranted(User::ROLE_FACILITATOR)]
     public function delete(
         Request $request,
         CourseRepository $courseRepository,
         CourseService $courseService,
     ): JsonResponse {
-        $course = $courseRepository->findOneByPublicId(Ulid::fromString($request->attributes->getString('id')));
+        $course = $this->ownedCourse($request, $courseRepository);
         if (!$course instanceof Course) {
-            return new JsonExceptionResponse(
-                JsonExceptionResponse::ERROR_NOT_FOUND,
-                'Course not found',
-                Response::HTTP_NOT_FOUND,
-            );
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Course not found', Response::HTTP_NOT_FOUND);
         }
-
-        $this->denyAccessUnlessGranted(CourseVoter::DELETE, $course);
 
         $courseService->delete($course);
 
         return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+    }
+
+    private function ownedCourse(Request $request, CourseRepository $courseRepository): ?Course
+    {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return null;
+        }
+
+        return $courseRepository->findOneByPublicIdAndOwner(
+            Ulid::fromString($request->attributes->getString('id')),
+            $user,
+        );
     }
 
     private function resolveCategory(string $publicId, CategoryRepository $categoryRepository): ?Category
@@ -450,29 +375,5 @@ final class CourseApiController extends AbstractController
         }
 
         return null;
-    }
-
-    /**
-     * @param Course[] $courses
-     */
-    private function paginatedCoursesResponse(
-        array $courses,
-        int $totalItems,
-        int $page,
-        int $limit,
-        SerializerService $serializerService,
-    ): JsonResponse {
-        $response = new JsonResponse();
-        $response->setData([
-            'courses' => json_decode($serializerService->serialize($courses)),
-            'pagination' => [
-                'current_page' => $page,
-                'items_per_page' => $limit,
-                'total_items' => $totalItems,
-                'total_pages' => 0,
-            ],
-        ]);
-
-        return $response;
     }
 }

@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\Bundle;
 use App\Entity\Course;
+use App\Enum\CourseStatus;
 use App\Exceptions\JsonExceptionResponse;
 use App\Repository\BundleRepository;
 use App\Repository\CategoryRepository;
@@ -20,6 +21,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Uid\Ulid;
 
 /**
  * Anonymous, read-only catalogue: published courses and bundles, active
@@ -70,9 +72,13 @@ final class PublicCatalogApiController extends AbstractController
         CourseRepository $courseRepository,
         SerializerService $serializerService,
     ): JsonResponse {
-        $course = $courseRepository->findPublishedBySlug($request->attributes->getString('slug'));
+        $identifier = $request->attributes->getString('slug');
+        $course = Ulid::isValid($identifier)
+            ? $courseRepository->findOneByPublicId(Ulid::fromString($identifier))
+            : $courseRepository->findPublishedBySlug($identifier);
 
-        if (!$course instanceof Course) {
+        // Only published courses are public, whether looked up by slug or ULID.
+        if (!$course instanceof Course || $course->getStatus() !== CourseStatus::Published) {
             return new JsonExceptionResponse(JsonExceptionResponse::ERROR_NOT_FOUND, 'Course not found.', Response::HTTP_NOT_FOUND);
         }
 

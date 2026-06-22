@@ -64,16 +64,17 @@ class VerificationCodeRepository extends ServiceEntityRepository
      */
     public function invalidateActive(User $user, VerificationPurpose $purpose): void
     {
-        $this->createQueryBuilder('code')
-            ->update()
-            ->set('code.usedAt', ':now')
-            ->where('code.user = :user')
-            ->andWhere('code.purpose = :purpose')
-            ->andWhere('code.usedAt IS NULL')
-            ->setParameter('now', new DateTime())
-            ->setParameter('user', $user)
-            ->setParameter('purpose', $purpose)
-            ->getQuery()
-            ->execute();
+        $activeCodes = $this->findBy(['user' => $user, 'purpose' => $purpose, 'usedAt' => null]);
+
+        if ($activeCodes === []) {
+            return;
+        }
+
+        $now = new DateTime();
+        foreach ($activeCodes as $verificationCode) {
+            $verificationCode->setUsedAt($now);
+        }
+
+        $this->getEntityManager()->flush();
     }
 }

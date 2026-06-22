@@ -37,6 +37,10 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Catalogue & learning**
 - Courses, lessons, and categories; paginated catalogue with search/level/category filters.
+- **Course access split by audience:** anyone (incl. logged-in students) discovers published
+  courses at `/public/courses` (detail by slug **or** ULID); facilitators manage **only their own**
+  courses at `/facilitator/courses`; admins view and moderate (publish/unpublish/delete) **all**
+  facilitators' courses at `/admin/courses`; students track what they've joined at `/enrollments`.
 - **Public catalogue** — anonymous `GET /api/v1/public/*` exposes published courses,
   bundles, active subscription plans, and categories. Responses are serialised with a
   JMS `public` group allowlist, so only non-sensitive fields are returned to anonymous
@@ -60,7 +64,7 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Engagement & content**
 - Community hub — posts (tags, image), comments, likes, trending topics, with admin moderation (hide/unhide).
-- Blog with **public (unauthenticated) read access** and facilitator/admin authoring.
+- Blog with **public (unauthenticated) read access** and admin-only authoring.
 - Newsletter — public, rate-limited **double opt-in** (confirm-by-email) + token unsubscribe.
 
 **Admin & operations**
@@ -82,13 +86,17 @@ usable. **Login is two-step**: `POST /auth/login` (email + password) returns
 unless the account is within its 2-day OTP trust window, in which case the JWT access
 token + refresh token are returned directly. `POST /auth/login/otp/verify` exchanges
 the code for the tokens (`/auth/login/otp/request` resends), and `POST /auth/refresh`
-rotates the access token. Password reset is request + confirm; logged-in users change
-their password at `POST /profile/password`. All passwords are breach-checked, and a
-change/reset revokes other sessions. Sensitive endpoints are rate-limited.
+rotates the access token. `POST /auth/logout` revokes refresh tokens (a `refresh_token`
+logs out that device; omit it or send `all: true` to end every session) — the stateless
+access token itself remains valid until it expires. Password reset is request + confirm;
+logged-in users change their password at `POST /profile/password`. All passwords are
+breach-checked, and a change/reset revokes other sessions. Sensitive endpoints are rate-limited.
 
-**Authoring (facilitator)** — create a course → add lessons (and upload a video per
-lesson) → publish. Course/lesson edits and video upload are gated to the owner (or
-admin) via voters.
+**Authoring (facilitator)** — under `/facilitator/courses`: create a course → add lessons
+(and upload a video per lesson) → publish, all scoped to the facilitator as owner. Lesson
+and video edits remain under `/courses/{id}/lessons` and are gated to the owner (or admin)
+via the `CourseVoter`. Admins oversee all courses at `/admin/courses` (view + publish /
+unpublish / delete; content editing stays with the owner).
 
 **Access & purchase** — access to a course is decided by `AccessService`:
 - **Free** course → immediate access.

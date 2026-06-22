@@ -57,6 +57,65 @@ class CourseRepository extends ServiceEntityRepository
         return $this->findOneBy(['slug' => $slug, 'status' => CourseStatus::Published]);
     }
 
+    public function findOneByPublicIdAndOwner(Ulid $publicId, User $owner): ?Course
+    {
+        return $this->findOneBy(['publicId' => $publicId, 'owner' => $owner]);
+    }
+
+    /**
+     * A facilitator's own courses (any status), newest first, with optional status
+     * and free-text title filters.
+     */
+    public function createOwnedQueryBuilder(User $owner, ?CourseStatus $status, ?string $search): QueryBuilder
+    {
+        $queryBuilder = $this->createQueryBuilder('course')
+            ->leftJoin('course.category', 'category')
+            ->addSelect('category')
+            ->where('course.owner = :owner')
+            ->setParameter('owner', $owner)
+            ->orderBy('course.createdAt', 'DESC');
+
+        if ($status instanceof CourseStatus) {
+            $queryBuilder->andWhere('course.status = :status')->setParameter('status', $status);
+        }
+
+        if (!is_null($search) && $search !== '') {
+            $queryBuilder->andWhere('course.title LIKE :search')->setParameter('search', '%' . $search . '%');
+        }
+
+        return $queryBuilder;
+    }
+
+    /**
+     * Admin management query: every course (any owner, any status), newest first,
+     * with optional free-text, status, category and owner filters.
+     */
+    public function createManagementQueryBuilder(?string $search, ?CourseStatus $status, ?Category $category, ?User $owner): QueryBuilder
+    {
+        $queryBuilder = $this->createQueryBuilder('course')
+            ->leftJoin('course.category', 'category')
+            ->addSelect('category')
+            ->orderBy('course.createdAt', 'DESC');
+
+        if (!is_null($search) && $search !== '') {
+            $queryBuilder->andWhere('course.title LIKE :search')->setParameter('search', '%' . $search . '%');
+        }
+
+        if ($status instanceof CourseStatus) {
+            $queryBuilder->andWhere('course.status = :status')->setParameter('status', $status);
+        }
+
+        if ($category instanceof Category) {
+            $queryBuilder->andWhere('course.category = :category')->setParameter('category', $category);
+        }
+
+        if ($owner instanceof User) {
+            $queryBuilder->andWhere('course.owner = :owner')->setParameter('owner', $owner);
+        }
+
+        return $queryBuilder;
+    }
+
     public function slugExists(string $slug): bool
     {
         return (int) $this->createQueryBuilder('course')

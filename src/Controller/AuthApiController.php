@@ -10,6 +10,7 @@ use App\Entity\UserProfile;
 use App\Enum\AccountType;
 use App\Exceptions\JsonExceptionResponse;
 use App\Service\Helper\Tools;
+use App\Service\RefreshTokenService;
 use App\Service\RegistrationService;
 use App\Service\SerializerService;
 use App\Service\UserLogService;
@@ -22,6 +23,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 final class AuthApiController extends AbstractController
@@ -135,5 +137,53 @@ final class AuthApiController extends AbstractController
         $response->setStatusCode(Response::HTTP_CREATED);
 
         return $response;
+    }
+
+    #[Route(
+        '/api/{version}/auth/logout',
+        name: 'api_auth_logout',
+        requirements: ['_format' => 'json', 'version' => 'v1'],
+        defaults: ['_format' => 'json'],
+        methods: [Request::METHOD_POST],
+    )]
+    #[IsGranted('ROLE_STUDENT')]
+    public function logout(
+        Request $request,
+        RefreshTokenService $refreshTokenService,
+        UserLogService $userLogService,
+    ): JsonResponse {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            $exception = $this->createAccessDeniedException();
+            return new JsonExceptionResponse(
+                JsonExceptionResponse::ERROR_UNAUTHORIZED,
+                $exception->getMessage(),
+                Response::HTTP_UNAUTHORIZED,
+            );
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $data = is_array($data) ? $data : [];
+
+        $refreshToken = array_key_exists('refresh_token', $data) ? (string) $data['refresh_token'] : '';
+        $allDevices = ($data['all'] ?? false) === true;
+
+        // A specific refresh token ends just that device; omitting it (or all=true)
+        // ends every session. The access token itself remains valid until it expires.
+        if (!$allDevices && $refreshToken !== '') {
+            $refreshTokenService->revokeForUser($user, $refreshToken);
+        } else {
+            $refreshTokenService->revokeAllForUser($user);
+        }
+
+        $userLogService->log(
+            UserLogType::LOGOUT,
+            'User logged out',
+            $user->getUserIdentifier(),
+            $request->headers->get('User-Agent'),
+            $request->getClientIp(),
+        );
+
+        return new JsonResponse(null, Response::HTTP_NO_CONTENT);
     }
 }

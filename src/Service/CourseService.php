@@ -58,6 +58,14 @@ class CourseService
         return $course;
     }
 
+    public function unpublish(Course $course): Course
+    {
+        $course->setStatus(CourseStatus::Draft);
+        $this->courseRepository->save($course, true);
+
+        return $course;
+    }
+
     public function delete(Course $course): void
     {
         $this->courseRepository->remove($course, true);
