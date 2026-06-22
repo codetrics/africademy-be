@@ -65,7 +65,7 @@ final class BundleApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/bundles',
+        '/api/{version}/facilitator/bundles',
         name: 'api_bundle_create',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -143,7 +143,7 @@ final class BundleApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/bundles/{id}',
+        '/api/{version}/facilitator/bundles/{id}',
         name: 'api_bundle_update',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -188,7 +188,7 @@ final class BundleApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/bundles/{id}/courses',
+        '/api/{version}/facilitator/bundles/{id}/courses',
         name: 'api_bundle_set_courses',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -238,7 +238,7 @@ final class BundleApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/bundles/{id}/publish',
+        '/api/{version}/facilitator/bundles/{id}/publish',
         name: 'api_bundle_publish',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -266,7 +266,7 @@ final class BundleApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/bundles/{id}',
+        '/api/{version}/facilitator/bundles/{id}',
         name: 'api_bundle_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

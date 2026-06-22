@@ -27,7 +27,7 @@ use Symfony\Component\Uid\Ulid;
 final class QuizApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/courses/{id}/quiz',
+        '/api/{version}/facilitator/courses/{id}/quiz',
         name: 'api_quiz_upsert',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -90,7 +90,7 @@ final class QuizApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{id}/quiz/attempts',
+        '/api/{version}/students/courses/{id}/quiz/attempts',
         name: 'api_quiz_attempt_create',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -130,7 +130,7 @@ final class QuizApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{id}/quiz/attempts',
+        '/api/{version}/students/courses/{id}/quiz/attempts',
         name: 'api_quiz_attempt_list',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

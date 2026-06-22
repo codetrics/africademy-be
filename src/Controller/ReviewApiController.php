@@ -55,7 +55,7 @@ final class ReviewApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{id}/reviews',
+        '/api/{version}/students/courses/{id}/reviews',
         name: 'api_review_create',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -100,7 +100,7 @@ final class ReviewApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/reviews/{id}',
+        '/api/{version}/students/reviews/{id}',
         name: 'api_review_update',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -138,7 +138,7 @@ final class ReviewApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/reviews/{id}',
+        '/api/{version}/students/reviews/{id}',
         name: 'api_review_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

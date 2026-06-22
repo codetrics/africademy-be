@@ -21,7 +21,7 @@ use Symfony\Component\Uid\Ulid;
 final class PaymentMethodApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/payment-methods/setup',
+        '/api/{version}/students/payment-methods/setup',
         name: 'api_payment_method_setup',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -43,7 +43,7 @@ final class PaymentMethodApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/payment-methods',
+        '/api/{version}/students/payment-methods',
         name: 'api_payment_method_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -66,7 +66,7 @@ final class PaymentMethodApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/payment-methods/{id}/default',
+        '/api/{version}/students/payment-methods/{id}/default',
         name: 'api_payment_method_default',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -96,7 +96,7 @@ final class PaymentMethodApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/payment-methods/{id}',
+        '/api/{version}/students/payment-methods/{id}',
         name: 'api_payment_method_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

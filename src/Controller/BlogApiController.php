@@ -150,7 +150,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts',
+        '/api/{version}/admin/blog/posts',
         name: 'api_blog_post_create',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -199,7 +199,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts/{id}',
+        '/api/{version}/admin/blog/posts/{id}',
         name: 'api_blog_post_update',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -247,7 +247,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts/{id}/publish',
+        '/api/{version}/admin/blog/posts/{id}/publish',
         name: 'api_blog_post_publish',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -276,7 +276,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts/{id}/unpublish',
+        '/api/{version}/admin/blog/posts/{id}/unpublish',
         name: 'api_blog_post_unpublish',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -305,7 +305,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts/{id}',
+        '/api/{version}/admin/blog/posts/{id}',
         name: 'api_blog_post_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -330,7 +330,7 @@ final class BlogApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/blog/posts/{id}/cover',
+        '/api/{version}/admin/blog/posts/{id}/cover',
         name: 'api_blog_post_cover_post',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

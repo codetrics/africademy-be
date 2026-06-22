@@ -43,7 +43,7 @@ final class SubscriptionApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/subscriptions',
+        '/api/{version}/students/subscriptions',
         name: 'api_subscription_create',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -96,7 +96,7 @@ final class SubscriptionApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/subscription',
+        '/api/{version}/students/subscription',
         name: 'api_subscription_current',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -124,7 +124,7 @@ final class SubscriptionApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/subscriptions/{id}/cancel',
+        '/api/{version}/students/subscriptions/{id}/cancel',
         name: 'api_subscription_cancel',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

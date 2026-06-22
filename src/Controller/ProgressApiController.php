@@ -21,7 +21,7 @@ use Symfony\Component\Uid\Ulid;
 final class ProgressApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/courses/{courseId}/lessons/{id}/complete',
+        '/api/{version}/students/courses/{courseId}/lessons/{id}/complete',
         name: 'api_progress_complete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -55,7 +55,7 @@ final class ProgressApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{courseId}/lessons/{id}/complete',
+        '/api/{version}/students/courses/{courseId}/lessons/{id}/complete',
         name: 'api_progress_uncomplete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -89,7 +89,7 @@ final class ProgressApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{id}/learn',
+        '/api/{version}/students/courses/{id}/learn',
         name: 'api_progress_learn',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

@@ -75,7 +75,7 @@ final class LessonApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{courseId}/lessons',
+        '/api/{version}/facilitator/courses/{courseId}/lessons',
         name: 'api_lesson_create',
         requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -186,7 +186,7 @@ final class LessonApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{courseId}/lessons/{id}',
+        '/api/{version}/facilitator/courses/{courseId}/lessons/{id}',
         name: 'api_lesson_update',
         requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -256,7 +256,7 @@ final class LessonApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{courseId}/lessons/{id}',
+        '/api/{version}/facilitator/courses/{courseId}/lessons/{id}',
         name: 'api_lesson_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -290,7 +290,7 @@ final class LessonApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{courseId}/lessons/{id}/video',
+        '/api/{version}/facilitator/courses/{courseId}/lessons/{id}/video',
         name: 'api_lesson_video_post',
         requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -347,7 +347,7 @@ final class LessonApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/courses/{courseId}/lessons/{id}/video',
+        '/api/{version}/facilitator/courses/{courseId}/lessons/{id}/video',
         name: 'api_lesson_video_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'courseId' => Requirement::ULID, 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
