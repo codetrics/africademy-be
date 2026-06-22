@@ -37,7 +37,7 @@ class AccessService
         }
 
         return $course->isIncludedInSubscription()
-            && !is_null($this->subscriptionRepository->findActiveByUser($user));
+            && !is_null($this->subscriptionRepository->findActiveByUserWithinPeriod($user));
     }
 
     public function grant(User $user, Course $course, EntitlementSource $source, ?DateTime $expiresAt = null): Entitlement
