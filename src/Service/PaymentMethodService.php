@@ -44,17 +44,15 @@ class PaymentMethodService
      */
     public function handleTokenizationItn(array $data): bool
     {
-        if ((string) ($data['custom_str1'] ?? '') !== PayFastService::TOKENIZATION_MARKER) {
+        // Validate the signature BEFORE claiming the ITN: an invalid signature
+        // must not be swallowed as "handled" (which would drop a real order ITN).
+        if (!$this->payFastService->validateItn($data)) {
             return false;
         }
 
-        if (!$this->payFastService->validateItn($data)) {
-            // Invalid signatures are logged for debugging but never stored.
-            $this->payfastLogger->warning('PayFast tokenization ITN rejected: invalid signature', [
-                'm_payment_id' => (string) ($data['m_payment_id'] ?? ''),
-            ]);
-
-            return true;
+        // Valid signature but not a tokenization ITN — defer to the order handler.
+        if ((string) ($data['custom_str1'] ?? '') !== PayFastService::TOKENIZATION_MARKER) {
+            return false;
         }
 
         $this->payfastWebhookRecorder->record($data, PayfastWebhookOutcome::Tokenization);

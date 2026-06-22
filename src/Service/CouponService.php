@@ -15,6 +15,8 @@ use App\Exceptions\CouponException;
 use App\Repository\CouponRedemptionRepository;
 use App\Repository\CouponRepository;
 use DateTime;
+use Doctrine\DBAL\LockMode;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\Uid\Ulid;
 
@@ -24,6 +26,7 @@ class CouponService
         private readonly CouponRepository $couponRepository,
         private readonly CouponRedemptionRepository $couponRedemptionRepository,
         private readonly UserLogService $userLogService,
+        private readonly EntityManagerInterface $entityManager,
     ) {
     }
 
@@ -79,6 +82,14 @@ class CouponService
     public function redeem(Coupon $coupon, User $user, int $amountDiscountedCents, ?Order $order = null, ?Subscription $subscription = null): void
     {
         if (!is_null($this->couponRedemptionRepository->findOneByCouponAndUser($coupon, $user))) {
+            return;
+        }
+
+        // Lock the coupon row (callers run redeem() inside a transaction) so the
+        // redemption-count increment is serialised — concurrent redemptions
+        // cannot lose an increment or both slip past the limit.
+        $coupon = $this->entityManager->find(Coupon::class, $coupon->getId(), LockMode::PESSIMISTIC_WRITE);
+        if (!$coupon instanceof Coupon) {
             return;
         }
 

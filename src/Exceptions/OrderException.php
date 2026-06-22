@@ -90,4 +90,9 @@ class OrderException extends Exception
     {
         return new self(JsonExceptionResponse::ERROR_INTERNAL_SERVER_ERROR, Response::HTTP_BAD_GATEWAY, 'The payment gateway refund could not be completed. No changes were made; please retry.');
     }
+
+    public static function refundNotCharged(): self
+    {
+        return new self(JsonExceptionResponse::ERROR_VALIDATION, Response::HTTP_UNPROCESSABLE_ENTITY, 'This order has no gateway payment reference and cannot be refunded automatically.');
+    }
 }
