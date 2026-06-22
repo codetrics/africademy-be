@@ -64,7 +64,29 @@ security:
         - { path: ^/open-api, roles: ROLE_DOCS }
         - { path: ^/health$, roles: PUBLIC_ACCESS }
         - { path: ^/webhooks/, roles: PUBLIC_ACCESS }
-        - { path: ^/api/v1/public, roles: PUBLIC_ACCESS }
+
+        # Public namespace — every endpoint is enumerated explicitly (no blanket
+        # ^/api/v1/public rule) so nothing becomes anonymous just by living here.
+        # Anonymous catalogue reads:
+        - { path: ^/api/v1/public/courses, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/bundles, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/plans, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/categories, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/blog, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/newsletter, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/certificates/verify, roles: PUBLIC_ACCESS }
+        # Auth that needs no token at all:
+        - { path: ^/api/v1/public/auth/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/auth/login$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/auth/verify-email, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/auth/password, roles: PUBLIC_ACCESS }
+        # Auth handshake — firewall-anonymous, but the request carries a short-lived
+        # token validated in the controller (pre_auth_token) / by refresh_jwt.
+        - { path: ^/api/v1/public/auth/login/otp, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/auth/refresh, roles: PUBLIC_ACCESS }
+        # Authenticated despite the /public path — requires a Bearer JWT.
+        - { path: ^/api/v1/public/auth/logout, roles: ROLE_STUDENT }
+
         - { path: ^/api, roles: ROLE_STUDENT }
         - { path: ^/, roles: ROLE_ADMIN }
 
