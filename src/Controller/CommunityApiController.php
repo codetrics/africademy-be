@@ -241,7 +241,7 @@ final class CommunityApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/community/posts/{id}/hide',
+        '/api/{version}/admin/community/posts/{id}/hide',
         name: 'api_community_post_hide',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -257,7 +257,7 @@ final class CommunityApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/community/posts/{id}/unhide',
+        '/api/{version}/admin/community/posts/{id}/unhide',
         name: 'api_community_post_unhide',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

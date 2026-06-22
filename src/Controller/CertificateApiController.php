@@ -24,7 +24,7 @@ use Symfony\Component\Uid\Ulid;
 final class CertificateApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/certificates',
+        '/api/{version}/students/certificates',
         name: 'api_certificate_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -55,7 +55,7 @@ final class CertificateApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/certificates/{id}/download',
+        '/api/{version}/students/certificates/{id}/download',
         name: 'api_certificate_download',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

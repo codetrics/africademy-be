@@ -26,7 +26,7 @@ use Symfony\Component\Uid\Ulid;
 final class EnrollmentApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/courses/{id}/enroll',
+        '/api/{version}/students/courses/{id}/enroll',
         name: 'api_enrollment_create',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -58,7 +58,7 @@ final class EnrollmentApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/enrollments',
+        '/api/{version}/students/enrollments',
         name: 'api_enrollment_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -98,7 +98,7 @@ final class EnrollmentApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/enrollments/{id}',
+        '/api/{version}/students/enrollments/{id}',
         name: 'api_enrollment_get',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -129,7 +129,7 @@ final class EnrollmentApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/enrollments/{id}',
+        '/api/{version}/students/enrollments/{id}',
         name: 'api_enrollment_delete',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],

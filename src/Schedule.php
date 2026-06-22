@@ -37,6 +37,10 @@ final class Schedule implements ScheduleProviderInterface
                     '0 4 * * *',
                     new RunCommandMessage('app:subscriptions:bill'),
                 ),
+                RecurringMessage::cron(
+                    '30 3 * * *',
+                    new RunCommandMessage('app:payfast:prune-webhook-events'),
+                ),
             );
     }
 }

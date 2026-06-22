@@ -42,7 +42,7 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 - **Course access split by audience:** anyone (incl. logged-in students) discovers published
   courses at `/public/courses` (detail by slug **or** ULID); facilitators manage **only their own**
   courses at `/facilitator/courses`; admins view and moderate (publish/unpublish/delete) **all**
-  facilitators' courses at `/admin/courses`; students track what they've joined at `/enrollments`.
+  facilitators' courses at `/admin/courses`; students track what they've joined at `/students/enrollments`.
 - **Public catalogue** — anonymous `GET /api/v1/public/*` exposes published courses,
   bundles, active subscription plans, and categories. Responses are serialised with a
   JMS `public` group allowlist, so only non-sensitive fields are returned to anonymous
@@ -97,9 +97,10 @@ breach-checked, and a change/reset revokes other sessions. Sensitive endpoints a
 
 **Authoring (facilitator)** — under `/facilitator/courses`: create a course → add lessons
 (and upload a video per lesson) → publish, all scoped to the facilitator as owner. Lesson
-and video edits remain under `/courses/{id}/lessons` and are gated to the owner (or admin)
-via the `CourseVoter`. Admins oversee all courses at `/admin/courses` (view + publish /
-unpublish / delete; content editing stays with the owner).
+and video authoring live under `/facilitator/courses/{courseId}/lessons` (the read GETs stay
+on `/courses/{courseId}/lessons`), gated to the owner (or admin) via the `CourseVoter`. Admins
+oversee all courses at `/admin/courses` (view + publish / unpublish / delete; content editing
+stays with the owner).
 
 **Access & purchase** — access to a course is decided by `AccessService`:
 - **Free** course → immediate access.
@@ -109,7 +110,7 @@ unpublish / delete; content editing stays with the owner).
 - **Subscription** → a stored, tokenized card is charged; access is granted to all
   included courses while the subscription is active.
 
-**Learning** — enrolled students call `GET /courses/{id}/learn` (gated by
+**Learning** — enrolled students call `GET /students/courses/{id}/learn` (gated by
 `AccessService`) for lessons + progress; stream a lesson video at
 `…/lessons/{id}/video` (owner, or entitled student of a published lesson); mark
 lessons complete. On finishing a certificate-enabled course (passing its quiz where

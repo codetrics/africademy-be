@@ -28,7 +28,7 @@ use Symfony\Component\Uid\Ulid;
 final class OrderApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/courses/{id}/purchase',
+        '/api/{version}/students/courses/{id}/purchase',
         name: 'api_order_purchase',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -73,7 +73,7 @@ final class OrderApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/bundles/{id}/purchase',
+        '/api/{version}/students/bundles/{id}/purchase',
         name: 'api_order_bundle_purchase',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -118,7 +118,7 @@ final class OrderApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/orders',
+        '/api/{version}/students/orders',
         name: 'api_order_list',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -152,7 +152,7 @@ final class OrderApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/orders/{id}',
+        '/api/{version}/students/orders/{id}',
         name: 'api_order_get',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
@@ -182,7 +182,7 @@ final class OrderApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/orders/{id}/refund-request',
+        '/api/{version}/students/orders/{id}/refund-request',
         name: 'api_order_refund_request',
         requirements: ['_format' => 'json', 'version' => 'v1', 'id' => Requirement::ULID],
         defaults: ['_format' => 'json'],
