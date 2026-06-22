@@ -29,7 +29,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 final class AuthApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/auth/register',
+        '/api/{version}/public/auth/register',
         name: 'api_auth_register',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -140,7 +140,7 @@ final class AuthApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/auth/logout',
+        '/api/{version}/public/auth/logout',
         name: 'api_auth_logout',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],

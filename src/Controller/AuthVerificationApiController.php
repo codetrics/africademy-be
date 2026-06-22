@@ -22,7 +22,7 @@ final class AuthVerificationApiController extends AbstractController
 {
 
     #[Route(
-        '/api/{version}/auth/verify-email/request',
+        '/api/{version}/public/auth/verify-email/request',
         name: 'api_auth_verify_email_request',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -51,7 +51,7 @@ final class AuthVerificationApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/auth/verify-email',
+        '/api/{version}/public/auth/verify-email',
         name: 'api_auth_verify_email',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -87,7 +87,7 @@ final class AuthVerificationApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/auth/password/forgot',
+        '/api/{version}/public/auth/password/forgot',
         name: 'api_auth_password_forgot',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -116,7 +116,7 @@ final class AuthVerificationApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/auth/password/reset',
+        '/api/{version}/public/auth/password/reset',
         name: 'api_auth_password_reset',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],

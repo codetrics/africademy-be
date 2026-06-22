@@ -21,7 +21,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 final class NewsletterApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/newsletter/subscribe',
+        '/api/{version}/public/newsletter/subscribe',
         name: 'api_newsletter_subscribe',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -68,7 +68,7 @@ final class NewsletterApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/newsletter/confirm',
+        '/api/{version}/public/newsletter/confirm',
         name: 'api_newsletter_confirm',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -93,7 +93,7 @@ final class NewsletterApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/newsletter/unsubscribe',
+        '/api/{version}/public/newsletter/unsubscribe',
         name: 'api_newsletter_unsubscribe',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],

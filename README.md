@@ -79,17 +79,17 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 ## Key flows
 
-**Authentication** — `POST /auth/register` (with `account_type` `student` or
+**Authentication** — `POST /public/auth/register` (with `account_type` `student` or
 `facilitator`) creates the account and queues a welcome email followed by the
 verification (OTP) email; students are active immediately, facilitators stay pending
-admin approval. The email must be verified (`POST /auth/verify-email/request` then
-`/auth/verify-email`) before the API is usable — and on verifying, a facilitator is
-emailed a separate "pending approval" notice. **Login is two-step**: `POST /auth/login` (email + password) returns
+admin approval. The email must be verified (`POST /public/auth/verify-email/request` then
+`/public/auth/verify-email`) before the API is usable — and on verifying, a facilitator is
+emailed a separate "pending approval" notice. **Login is two-step**: `POST /public/auth/login` (email + password) returns
 `otp_pending: true` and a short-lived `pre_auth_token` while emailing a 6-digit code —
 unless the account is within its 2-day OTP trust window, in which case the JWT access
-token + refresh token are returned directly. `POST /auth/login/otp/verify` exchanges
-the code for the tokens (`/auth/login/otp/request` resends), and `POST /auth/refresh`
-rotates the access token. `POST /auth/logout` revokes refresh tokens (a `refresh_token`
+token + refresh token are returned directly. `POST /public/auth/login/otp/verify` exchanges
+the code for the tokens (`/public/auth/login/otp/request` resends), and `POST /public/auth/refresh`
+rotates the access token. `POST /public/auth/logout` revokes refresh tokens (a `refresh_token`
 logs out that device; omit it or send `all: true` to end every session) — the stateless
 access token itself remains valid until it expires. Password reset is request + confirm;
 logged-in users change their password at `POST /profile/password`. All passwords are
