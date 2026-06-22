@@ -3120,6 +3120,7 @@ components:
                 id: { type: string, description: ULID public identifier }
                 course_id: { type: string, description: Reviewed course ULID }
                 reviewer: { type: string, description: Display name of the student who wrote the review }
+                is_author: { type: boolean, description: True when the authenticated user wrote this review }
                 rating: { type: integer, minimum: 1, maximum: 5 }
                 body: { type: string, nullable: true, description: 'Optional written review (max 2000 chars)' }
                 created_at: { type: integer, description: Unix timestamp }
@@ -3129,6 +3130,7 @@ components:
             properties:
                 id: { type: string, description: ULID public identifier }
                 author: { type: string, description: Display name of the author }
+                is_author: { type: boolean, description: True when the authenticated user wrote this post }
                 tag: { type: string, enum: [resource, question, showcase, mentorship] }
                 title: { type: string }
                 body: { type: string }
