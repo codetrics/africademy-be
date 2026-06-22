@@ -15,6 +15,7 @@ use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Uid\Ulid;
 
 class PaymentMethodService
@@ -26,6 +27,7 @@ class PaymentMethodService
         private readonly TokenCipher $tokenCipher,
         private readonly UserLogService $userLogService,
         private readonly PayfastWebhookRecorder $payfastWebhookRecorder,
+        #[Target('payfast')]
         private readonly LoggerInterface $payfastLogger,
         private readonly EntityManagerInterface $entityManager,
     ) {
