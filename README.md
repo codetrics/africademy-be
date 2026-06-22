@@ -82,9 +82,11 @@ usable. **Login is two-step**: `POST /auth/login` (email + password) returns
 unless the account is within its 2-day OTP trust window, in which case the JWT access
 token + refresh token are returned directly. `POST /auth/login/otp/verify` exchanges
 the code for the tokens (`/auth/login/otp/request` resends), and `POST /auth/refresh`
-rotates the access token. Password reset is request + confirm; logged-in users change
-their password at `POST /profile/password`. All passwords are breach-checked, and a
-change/reset revokes other sessions. Sensitive endpoints are rate-limited.
+rotates the access token. `POST /auth/logout` revokes refresh tokens (a `refresh_token`
+logs out that device; omit it or send `all: true` to end every session) — the stateless
+access token itself remains valid until it expires. Password reset is request + confirm;
+logged-in users change their password at `POST /profile/password`. All passwords are
+breach-checked, and a change/reset revokes other sessions. Sensitive endpoints are rate-limited.
 
 **Authoring (facilitator)** — create a course → add lessons (and upload a video per
 lesson) → publish. Course/lesson edits and video upload are gated to the owner (or

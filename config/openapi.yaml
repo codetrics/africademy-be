@@ -103,8 +103,10 @@ security:
 tags:
     - name: Auth
       description: >
-        Registration, login (JWT access + refresh), token refresh, email verification (OTP),
-        and password reset. Public — no token required. Register returns no token; log in afterwards.
+        Registration, login (JWT access + refresh), token refresh, logout (refresh-token
+        revocation), email verification (OTP), and password reset. Mostly public — no token
+        required — except logout, which needs a valid access token. Register returns no token;
+        log in afterwards.
     - name: Public
       description: >
         Anonymous, read-only catalogue for visitors who have not signed in — courses, bundles,
@@ -445,6 +447,28 @@ paths:
                                 properties:
                                     token: { type: string }
                                     refresh_token: { type: string }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+    /auth/logout:
+        post:
+            tags: [Auth]
+            summary: Log out — revoke refresh token(s)
+            description: >
+                Ends the session by revoking refresh tokens so they can no longer be exchanged for new
+                access tokens. Supply `refresh_token` to log out just that device; omit it (or send
+                `all: true`) to revoke every session for the user. **Note:** the current access token is
+                stateless and remains valid until it expires (~1h) — clients should also discard it.
+                Requires a valid access token.
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                refresh_token: { type: string, description: Revoke only this device's token; omit to revoke all }
+                                all: { type: boolean, description: When true, revoke every session for the user }
+            responses:
+                '204': { description: Session(s) revoked }
                 '401': { $ref: '#/components/responses/Unauthorized' }
     /auth/verify-email/request:
         post:

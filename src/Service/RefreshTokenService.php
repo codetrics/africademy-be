@@ -28,4 +28,21 @@ class RefreshTokenService
             ->setParameter('username', $user->getUserIdentifier())
             ->execute();
     }
+
+    /**
+     * Revokes a single refresh token, but only if it belongs to the user (so one
+     * user cannot revoke another's session). Returns whether a token was deleted.
+     */
+    public function revokeForUser(User $user, string $refreshToken): bool
+    {
+        $deleted = $this->entityManager->createQuery(
+            'DELETE FROM ' . RefreshToken::class . ' refreshToken'
+            . ' WHERE refreshToken.username = :username AND refreshToken.refreshToken = :token',
+        )
+            ->setParameter('username', $user->getUserIdentifier())
+            ->setParameter('token', $refreshToken)
+            ->execute();
+
+        return $deleted > 0;
+    }
 }
