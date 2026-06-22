@@ -10,9 +10,7 @@ use App\Enum\UserStatus;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
-use Psr\Log\LoggerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Throwable;
 
 class RegistrationService
 {
@@ -20,8 +18,7 @@ class RegistrationService
         private readonly UserRepository $userRepository,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly EntityManagerInterface $entityManager,
-        private readonly NotificationService $notificationService,
-        private readonly LoggerInterface $logger,
+        private readonly WelcomeMailer $welcomeMailer,
     ) {
     }
 
@@ -56,30 +53,11 @@ class RegistrationService
             throw $exception;
         }
 
-        $this->sendWelcomeEmail($user, $accountType);
+        // Generic welcome for every account; the verification email follows (sent
+        // by the controller). Facilitators get a separate pending-approval email
+        // only after they verify their address.
+        $this->welcomeMailer->sendWelcome($user);
 
         return $user;
-    }
-
-    private function sendWelcomeEmail(User $user, AccountType $accountType): void
-    {
-        [$subject, $template] = $accountType === AccountType::Facilitator
-            ? ['Your Africademy facilitator account is pending approval', 'email/welcome_facilitator.html.twig']
-            : ['Welcome to Africademy', 'email/welcome_student.html.twig'];
-
-        // The account is already committed; a failure to queue the welcome email
-        // must not fail registration.
-        try {
-            $this->notificationService->createEmailNotification(
-                [$user->getEmail()],
-                $subject,
-                $template,
-                [
-                    'first_name' => $user->getProfile()->getFirstName(),
-                ],
-            );
-        } catch (Throwable $exception) {
-            $this->logger->error(sprintf('Failed to queue welcome email for %s: %s', $user->getEmail(), $exception->getMessage()));
-        }
     }
 }
