@@ -140,7 +140,7 @@ final class AuthApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/public/auth/logout',
+        '/api/{version}/auth/logout',
         name: 'api_auth_logout',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],

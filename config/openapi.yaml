@@ -22,11 +22,11 @@ info:
            Returns `otp_pending: true` plus a short-lived `pre_auth_token` (an OTP is emailed),
            unless the account is within its **2-day OTP trust window**, in which case the JWT
            **access token** (TTL ~1h) and **refresh token** (TTL ~30d) are returned directly.
-        4. `POST /public/auth/login/otp/verify` — exchange the `pre_auth_token` + emailed code for the
-           access + refresh tokens (`/public/auth/login/otp/request` resends the code). A successful OTP
+        4. `POST /auth/login/otp/verify` — exchange the `pre_auth_token` + emailed code for the
+           access + refresh tokens (`/auth/login/otp/request` resends the code). A successful OTP
            trusts the account for 2 days.
         5. Send `Authorization: Bearer <access_token>` on every authenticated request.
-        6. `POST /public/auth/refresh` — exchange the refresh token for a new access token.
+        6. `POST /auth/refresh` — exchange the refresh token for a new access token.
 
         The issued JWT payload carries the user's ULID as the `id` claim. Token failures
         return a specific `401`: **expired** ("Token expired."), **invalid** ("Invalid
@@ -44,8 +44,8 @@ info:
         posts they own (record-level checks via voters); admins manage coupons, refunds, blog
         categories, analytics, the student and facilitator directories, and email campaigns.
 
-        ### Public endpoints (no token) — all under `/public/*`
-        - `POST /public/auth/*` (register, login, refresh, verify-email, password reset, logout)
+        ### Public endpoints (no token) — under `/public/*`
+        - `POST /public/auth/*` (register, login, verify-email, password reset)
         - `GET /public/*` — anonymous catalogue (published courses & bundles, active plans,
           categories). Responses use the `public` serialization group, so only non-sensitive
           fields are returned; the equivalent authenticated endpoints return the full payload.
@@ -54,6 +54,12 @@ info:
         - `POST /public/newsletter/subscribe`, `GET /public/newsletter/unsubscribe`
         - `GET /public/certificates/verify/{credentialId}` — public certificate verification
         - `GET /open-api/docs` — this documentation
+
+        ### Auth handshake (not under `/public` — each carries a short-lived token)
+        - `POST /auth/login/otp/request`, `POST /auth/login/otp/verify` — firewall-anonymous;
+          exchange the `pre_auth_token` (+ emailed code) for the access + refresh tokens.
+        - `POST /auth/refresh` — firewall-anonymous; exchange a `refresh_token` for a new access token.
+        - `POST /auth/logout` — requires a Bearer JWT.
 
         ### Conventions
         - **Identifiers:** every resource is addressed by its **ULID** public id; internal
@@ -350,7 +356,7 @@ paths:
             description: >
                 Verifies the password (first factor). Login uses mandatory email OTP, so the response
                 depends on `otp_pending`: when `true`, an OTP has been emailed and a short-lived
-                `pre_auth_token` is returned — exchange it at `/public/auth/login/otp/verify`. When `false`
+                `pre_auth_token` is returned — exchange it at `/auth/login/otp/verify`. When `false`
                 (the account is within its 2-day OTP trust window), the real `token` and
                 `refresh_token` are returned directly. Public endpoint. Non-active accounts are
                 rejected with `401` and a specific message (pending review / rejected / suspended).
@@ -374,11 +380,11 @@ paths:
                                 type: object
                                 properties:
                                     otp_pending: { type: boolean, description: 'When true, complete the OTP step' }
-                                    pre_auth_token: { type: string, description: Present when otp_pending=true; exchange at /public/auth/login/otp/verify (TTL 5m) }
+                                    pre_auth_token: { type: string, description: Present when otp_pending=true; exchange at /auth/login/otp/verify (TTL 5m) }
                                     token: { type: string, description: Present when otp_pending=false; JWT access token (TTL 1h) }
                                     refresh_token: { type: string, description: Present when otp_pending=false; refresh token (TTL 30d) }
                 '401': { $ref: '#/components/responses/Unauthorized' }
-    /public/auth/login/otp/verify:
+    /auth/login/otp/verify:
         post:
             tags: [Auth]
             summary: Verify login OTP — step 2 of OTP login
@@ -407,7 +413,7 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /public/auth/login/otp/request:
+    /auth/login/otp/request:
         post:
             tags: [Auth]
             summary: Resend login OTP
@@ -427,7 +433,7 @@ paths:
                 '400': { $ref: '#/components/responses/BadRequest' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '429': { $ref: '#/components/responses/RateLimited' }
-    /public/auth/refresh:
+    /auth/refresh:
         post:
             tags: [Auth]
             summary: Exchange a refresh token for a new access token
@@ -452,7 +458,7 @@ paths:
                                     token: { type: string }
                                     refresh_token: { type: string }
                 '401': { $ref: '#/components/responses/Unauthorized' }
-    /public/auth/logout:
+    /auth/logout:
         post:
             tags: [Auth]
             summary: Log out — revoke refresh token(s)

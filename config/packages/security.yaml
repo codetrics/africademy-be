@@ -80,12 +80,12 @@ security:
         - { path: ^/api/v1/public/auth/login$, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/auth/verify-email, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/auth/password, roles: PUBLIC_ACCESS }
-        # Auth handshake — firewall-anonymous, but the request carries a short-lived
-        # token validated in the controller (pre_auth_token) / by refresh_jwt.
-        - { path: ^/api/v1/public/auth/login/otp, roles: PUBLIC_ACCESS }
-        - { path: ^/api/v1/public/auth/refresh, roles: PUBLIC_ACCESS }
-        # Authenticated despite the /public path — requires a Bearer JWT.
-        - { path: ^/api/v1/public/auth/logout, roles: ROLE_STUDENT }
+        # Auth handshake — kept out of /public because the request carries a
+        # short-lived token, but firewall-anonymous (no Bearer JWT yet); the
+        # pre_auth_token / refresh_token is validated downstream.
+        - { path: ^/api/v1/auth/login/otp, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/auth/refresh, roles: PUBLIC_ACCESS }
+        # /auth/logout requires a Bearer JWT — falls through to ^/api (ROLE_STUDENT).
 
         - { path: ^/api, roles: ROLE_STUDENT }
         - { path: ^/, roles: ROLE_ADMIN }

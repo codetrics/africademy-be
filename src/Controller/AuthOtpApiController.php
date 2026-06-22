@@ -21,7 +21,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class AuthOtpApiController extends AbstractController
 {
     #[Route(
-        '/api/{version}/public/auth/login/otp/verify',
+        '/api/{version}/auth/login/otp/verify',
         name: 'api_auth_login_otp_verify',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
@@ -84,7 +84,7 @@ final class AuthOtpApiController extends AbstractController
     }
 
     #[Route(
-        '/api/{version}/public/auth/login/otp/request',
+        '/api/{version}/auth/login/otp/request',
         name: 'api_auth_login_otp_request',
         requirements: ['_format' => 'json', 'version' => 'v1'],
         defaults: ['_format' => 'json'],
