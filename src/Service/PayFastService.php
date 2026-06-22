@@ -57,10 +57,10 @@ class PayFastService
             'notify_url' => $this->notifyUrl,
             'm_payment_id' => (string) $order->getPublicId(),
             'amount' => $this->formatAmount($order->getAmount()->getAmountCents()),
-            'item_name' => substr($this->orderItemName($order), 0, self::ITEM_NAME_MAX_LENGTH),
+            'item_name' => substr(trim($this->orderItemName($order)), 0, self::ITEM_NAME_MAX_LENGTH),
         ];
 
-        $fields['signature'] = $this->generateSignature($fields);
+        $fields = $this->signFields($fields);
 
         return [
             'url' => $this->sandbox ? self::SANDBOX_PROCESS_URL : self::LIVE_PROCESS_URL,
@@ -90,7 +90,7 @@ class PayFastService
             'custom_str2' => (string) $user->getPublicId(),
         ];
 
-        $fields['signature'] = $this->generateSignature($fields);
+        $fields = $this->signFields($fields);
 
         return [
             'url' => $this->sandbox ? self::SANDBOX_PROCESS_URL : self::LIVE_PROCESS_URL,
@@ -128,6 +128,24 @@ class PayFastService
         unset($data['signature']);
 
         return hash_equals($this->generateSignature($data), $signature);
+    }
+
+    /**
+     * Trims every field, then appends the signature. Trimming here keeps the
+     * submitted values identical to the values that are signed — otherwise a
+     * field with surrounding whitespace (e.g. an item name) would be signed
+     * trimmed but posted untrimmed, and PayFast would reject the signature.
+     *
+     * @param array<string, string> $fields
+     *
+     * @return array<string, string>
+     */
+    private function signFields(array $fields): array
+    {
+        $fields = array_map(static fn (string $value): string => trim($value), $fields);
+        $fields['signature'] = $this->generateSignature($fields);
+
+        return $fields;
     }
 
     /**
