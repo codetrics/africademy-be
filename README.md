@@ -27,7 +27,9 @@ exception is a Swagger UI page that renders the OpenAPI spec.
   (Pwned Passwords k-anonymity).
 - A password change/reset **revokes existing sessions** (refresh tokens) and re-arms
   the OTP step on the next login.
-- **Welcome emails on signup** (students; facilitators receive a pending-approval notice).
+- **Onboarding emails:** every signup gets a welcome email then the verification (OTP)
+  email; a facilitator additionally receives a separate "pending approval" email **after**
+  they verify their address.
 - Audit logging (`UserLog`) and queued email notifications.
 - Sign-up `account_type` (`student` / `facilitator`); facilitator accounts are created
   pending admin approval and cannot log in until approved (admin approve/reject
@@ -78,10 +80,11 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 ## Key flows
 
 **Authentication** — `POST /auth/register` (with `account_type` `student` or
-`facilitator`) creates the account and queues a welcome email; students are active
-immediately, facilitators stay pending admin approval. The email must be verified
-(`POST /auth/verify-email/request` then `/auth/verify-email`) before the API is
-usable. **Login is two-step**: `POST /auth/login` (email + password) returns
+`facilitator`) creates the account and queues a welcome email followed by the
+verification (OTP) email; students are active immediately, facilitators stay pending
+admin approval. The email must be verified (`POST /auth/verify-email/request` then
+`/auth/verify-email`) before the API is usable — and on verifying, a facilitator is
+emailed a separate "pending approval" notice. **Login is two-step**: `POST /auth/login` (email + password) returns
 `otp_pending: true` and a short-lived `pre_auth_token` while emailing a 6-digit code —
 unless the account is within its 2-day OTP trust window, in which case the JWT access
 token + refresh token are returned directly. `POST /auth/login/otp/verify` exchanges

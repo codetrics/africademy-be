@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\User;
 use App\Entity\VerificationCode;
+use App\Enum\UserStatus;
 use App\Enum\VerificationPurpose;
 use App\Repository\UserRepository;
 use App\Repository\VerificationCodeRepository;
@@ -23,6 +24,7 @@ class VerificationService
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly NotificationService $notificationService,
         private readonly RefreshTokenService $refreshTokenService,
+        private readonly WelcomeMailer $welcomeMailer,
     ) {
     }
 
@@ -72,6 +74,15 @@ class VerificationService
 
         $user->setEmailVerifiedAt(new DateTime());
         $this->userRepository->save($user, true);
+
+        // A facilitator only learns their account is pending approval once they've
+        // proven they own the address.
+        if (
+            $user->getStatus() === UserStatus::PendingReview
+            && in_array(User::ROLE_FACILITATOR, $user->getRawRoles(), true)
+        ) {
+            $this->welcomeMailer->sendFacilitatorPendingApproval($user);
+        }
 
         return true;
     }

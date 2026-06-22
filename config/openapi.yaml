@@ -312,7 +312,8 @@ paths:
             tags: [Auth]
             summary: Register a new user
             description: >
-                Creates a user and its profile. Returns no token — log in afterwards. Public endpoint.
+                Creates a user and its profile, then queues a welcome email followed by the
+                verification (OTP) email. Returns no token — log in afterwards. Public endpoint.
                 `account_type` selects the kind of account: `student` accounts get `ROLE_STUDENT` and
                 are active immediately; `facilitator` accounts get `ROLE_FACILITATOR` straight away but stay
                 pending admin approval and cannot log in until approved.
@@ -496,6 +497,7 @@ paths:
         post:
             tags: [Auth]
             summary: Verify an email with a code
+            description: Marks the email verified. A facilitator awaiting approval is then emailed a separate "pending approval" notice.
             security: []
             requestBody:
                 required: true
