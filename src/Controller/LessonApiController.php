@@ -47,6 +47,7 @@ final class LessonApiController extends AbstractController
         CourseRepository $courseRepository,
         LessonRepository $lessonRepository,
         SerializerService $serializerService,
+        AccessService $accessService,
     ): JsonResponse {
         $user = $this->narrowUser();
         if (!$user instanceof User) {
@@ -60,16 +61,27 @@ final class LessonApiController extends AbstractController
 
         $lessons = $lessonRepository->findByCourseOrdered($course);
 
+        $isOwner = $course->getOwner()->getId() === $user->getId();
+
         // Non-owners only see published lessons.
-        if ($course->getOwner()->getId() !== $user->getId()) {
+        if (!$isOwner) {
             $lessons = array_values(array_filter(
                 $lessons,
                 static fn (Lesson $lesson): bool => $lesson->getStatus() === LessonStatus::Published,
             ));
         }
 
+        $serialized = json_decode($serializerService->serialize($lessons));
+
+        // Non-entitled viewers get the outline only — no video URL or lesson body.
+        if (!$isOwner && !$accessService->hasAccess($user, $course)) {
+            foreach ($serialized as $lesson) {
+                unset($lesson->video_url, $lesson->body, $lesson->content_ref);
+            }
+        }
+
         $response = new JsonResponse();
-        $response->setData(['lessons' => json_decode($serializerService->serialize($lessons))]);
+        $response->setData(['lessons' => $serialized]);
 
         return $response;
     }
@@ -158,6 +170,7 @@ final class LessonApiController extends AbstractController
         CourseRepository $courseRepository,
         LessonRepository $lessonRepository,
         SerializerService $serializerService,
+        AccessService $accessService,
     ): JsonResponse {
         $user = $this->narrowUser();
         if (!$user instanceof User) {
@@ -179,8 +192,15 @@ final class LessonApiController extends AbstractController
             return $this->lessonNotFound();
         }
 
+        $serialized = json_decode($serializerService->serialize($lesson));
+
+        // Non-entitled viewers get the outline only — no video URL or lesson body.
+        if (!$isOwner && !$accessService->hasAccess($user, $course)) {
+            unset($serialized->video_url, $serialized->body, $serialized->content_ref);
+        }
+
         $response = new JsonResponse();
-        $response->setData(['lesson' => json_decode($serializerService->serialize($lesson))]);
+        $response->setData(['lesson' => $serialized]);
 
         return $response;
     }

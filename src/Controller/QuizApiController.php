@@ -77,8 +77,13 @@ final class QuizApiController extends AbstractController
         QuizService $quizService,
         SerializerService $serializerService,
     ): JsonResponse {
+        $user = $this->narrowUser();
+        if (!$user instanceof User) {
+            return $this->unauthorized();
+        }
+
         try {
-            $quiz = $quizService->getForCourse(Ulid::fromString($request->attributes->getString('id')));
+            $quiz = $quizService->getForCourse($user, Ulid::fromString($request->attributes->getString('id')));
         } catch (QuizException $exception) {
             return $this->mapException($exception);
         }

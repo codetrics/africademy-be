@@ -913,7 +913,10 @@ paths:
         get:
             tags: [Lessons]
             summary: List a course's lessons
-            description: Non-owners see published lessons only.
+            description: >-
+                Non-owners see published lessons only. Viewers without active access to the
+                course (not the owner, no entitlement/subscription) receive the lesson
+                outline only — `video_url`, `body` and `content_ref` are omitted.
             responses:
                 '200':
                     description: Lessons (ordered by position)
@@ -967,6 +970,10 @@ paths:
         get:
             tags: [Lessons]
             summary: Get a lesson
+            description: >-
+                Viewers without active access to the course (not the owner, no
+                entitlement/subscription) receive the lesson outline only —
+                `video_url`, `body` and `content_ref` are omitted.
             responses:
                 '200':
                     description: The lesson
@@ -1278,7 +1285,10 @@ paths:
         get:
             tags: [Quiz]
             summary: Get the course's quiz (take-view)
-            description: Returns the quiz with its questions and choices. Correct-answer flags are never included.
+            description: >-
+                Returns the quiz with its questions and choices. Correct-answer flags are
+                never included. Requires the caller to be enrolled in the course and to
+                still have access (402 otherwise).
             responses:
                 '200':
                     description: The quiz

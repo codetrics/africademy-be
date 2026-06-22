@@ -44,6 +44,14 @@ class QuizAttemptRepository extends ServiceEntityRepository
         }
     }
 
+    /**
+     * @return QuizAttempt[]
+     */
+    public function findByQuiz(Quiz $quiz): array
+    {
+        return $this->findBy(['quiz' => $quiz]);
+    }
+
     public function hasPassingAttempt(User $student, Quiz $quiz): bool
     {
         $count = $this->createQueryBuilder('attempt')
