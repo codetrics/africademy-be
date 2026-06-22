@@ -33,6 +33,7 @@ class UserLogType
     public const string PROFILE_UPDATE = 'profile_update';
     public const string PURCHASE_INITIATED = 'purchase_initiated';
     public const string PAYMENT_COMPLETED = 'payment_completed';
+    public const string ORDER_CANCELLED = 'order_cancelled';
     public const string REFUND_REQUESTED = 'refund_requested';
     public const string PAYMENT_METHOD_ADDED = 'payment_method_added';
     public const string PAYMENT_METHOD_REMOVED = 'payment_method_removed';

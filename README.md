@@ -73,6 +73,9 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 - Analytics dashboard (users, revenue, MRR, subscriptions, enrollments, top courses).
 - Student directory, facilitator directory with approve/reject of pending facilitators
   (each queues a decision email), and a `UserLog`-backed activity feed.
+- Order management — paginated order listing with status counts (track pending vs
+  processed), filters (status, buyer, type, date range), per-order detail, and
+  cancelling abandoned pending orders (`/admin/orders`).
 - Segmented email campaigns queued through the notification pipeline.
 
 ---
