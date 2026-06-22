@@ -37,9 +37,10 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Catalogue & learning**
 - Courses, lessons, and categories; paginated catalogue with search/level/category filters.
-- **Course access split by audience:** students read published courses at `/courses`;
-  facilitators manage **only their own** courses at `/facilitator/courses`; admins view and
-  moderate (publish/unpublish/delete) **all** facilitators' courses at `/admin/courses`.
+- **Course access split by audience:** anyone (incl. logged-in students) discovers published
+  courses at `/public/courses` (detail by slug **or** ULID); facilitators manage **only their own**
+  courses at `/facilitator/courses`; admins view and moderate (publish/unpublish/delete) **all**
+  facilitators' courses at `/admin/courses`; students track what they've joined at `/enrollments`.
 - **Public catalogue** — anonymous `GET /api/v1/public/*` exposes published courses,
   bundles, active subscription plans, and categories. Responses are serialised with a
   JMS `public` group allowlist, so only non-sensitive fields are returned to anonymous
