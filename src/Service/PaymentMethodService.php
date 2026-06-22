@@ -8,9 +8,11 @@ use App\Entity\PaymentMethod;
 use App\Entity\User;
 use App\Entity\UserLogType;
 use App\Enum\PaymentMethodStatus;
+use App\Enum\PayfastWebhookOutcome;
 use App\Exceptions\PaymentMethodException;
 use App\Repository\PaymentMethodRepository;
 use App\Repository\UserRepository;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Ulid;
 
 class PaymentMethodService
@@ -21,6 +23,8 @@ class PaymentMethodService
         private readonly PayFastService $payFastService,
         private readonly TokenCipher $tokenCipher,
         private readonly UserLogService $userLogService,
+        private readonly PayfastWebhookRecorder $payfastWebhookRecorder,
+        private readonly LoggerInterface $payfastLogger,
     ) {
     }
 
@@ -45,8 +49,20 @@ class PaymentMethodService
         }
 
         if (!$this->payFastService->validateItn($data)) {
+            // Invalid signatures are logged for debugging but never stored.
+            $this->payfastLogger->warning('PayFast tokenization ITN rejected: invalid signature', [
+                'm_payment_id' => (string) ($data['m_payment_id'] ?? ''),
+            ]);
+
             return true;
         }
+
+        $this->payfastWebhookRecorder->record($data, PayfastWebhookOutcome::Tokenization);
+        $this->payfastLogger->info('PayFast ITN processed', [
+            'm_payment_id' => (string) ($data['m_payment_id'] ?? ''),
+            'pf_payment_id' => (string) ($data['pf_payment_id'] ?? ''),
+            'outcome' => PayfastWebhookOutcome::Tokenization->value,
+        ]);
 
         $token = (string) ($data['token'] ?? '');
         $userPublicId = (string) ($data['custom_str2'] ?? '');

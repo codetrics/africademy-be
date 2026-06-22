@@ -14,6 +14,7 @@ use App\Enum\BundleStatus;
 use App\Enum\CourseStatus;
 use App\Enum\EntitlementSource;
 use App\Enum\OrderStatus;
+use App\Enum\PayfastWebhookOutcome;
 use App\Exceptions\OrderException;
 use App\Repository\BundleRepository;
 use App\Repository\CourseRepository;
@@ -24,6 +25,7 @@ use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Exception;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Ulid;
 
 class OrderService
@@ -41,6 +43,8 @@ class OrderService
         private readonly CouponService $couponService,
         private readonly UserLogService $userLogService,
         private readonly EntityManagerInterface $entityManager,
+        private readonly PayfastWebhookRecorder $payfastWebhookRecorder,
+        private readonly LoggerInterface $payfastLogger,
     ) {
     }
 
@@ -210,35 +214,48 @@ class OrderService
      */
     public function handlePayFastItn(array $data): bool
     {
-        if (!$this->payFastService->validateItn($data)) {
-            return false;
-        }
-
         $merchantPaymentId = (string) ($data['m_payment_id'] ?? '');
-        if (!Ulid::isValid($merchantPaymentId)) {
+
+        if (!$this->payFastService->validateItn($data)) {
+            // Invalid signatures are logged for debugging but never stored.
+            $this->payfastLogger->warning('PayFast ITN rejected: invalid signature', [
+                'm_payment_id' => $merchantPaymentId,
+                'payment_status' => (string) ($data['payment_status'] ?? ''),
+            ]);
+
             return false;
         }
 
-        $order = $this->orderRepository->findOneByPublicId(Ulid::fromString($merchantPaymentId));
-        if (is_null($order)) {
-            return false;
-        }
-
-        if ((string) ($data['payment_status'] ?? '') !== 'COMPLETE') {
-            return false;
-        }
-
+        $order = Ulid::isValid($merchantPaymentId)
+            ? $this->orderRepository->findOneByPublicId(Ulid::fromString($merchantPaymentId))
+            : null;
+        $paymentStatus = (string) ($data['payment_status'] ?? '');
         // Compare in integer cents — never float-equality on money.
         $paidCents = (int) round(((float) ($data['amount_gross'] ?? 0)) * 100);
-        if ($paidCents !== $order->getAmount()->getAmountCents()) {
-            return false;
+
+        $outcome = match (true) {
+            !$order instanceof Order => PayfastWebhookOutcome::Unmatched,
+            $paymentStatus !== 'COMPLETE' => PayfastWebhookOutcome::NotComplete,
+            $paidCents !== $order->getAmount()->getAmountCents() => PayfastWebhookOutcome::AmountMismatch,
+            $order->isPaid() => PayfastWebhookOutcome::Duplicate,
+            default => PayfastWebhookOutcome::OrderCompleted,
+        };
+
+        $this->payfastWebhookRecorder->record($data, $outcome);
+        $this->payfastLogger->info('PayFast ITN processed', [
+            'm_payment_id' => $merchantPaymentId,
+            'pf_payment_id' => (string) ($data['pf_payment_id'] ?? ''),
+            'payment_status' => $paymentStatus,
+            'amount_cents' => $paidCents,
+            'outcome' => $outcome->value,
+        ]);
+
+        if ($outcome === PayfastWebhookOutcome::OrderCompleted && $order instanceof Order) {
+            return $this->completeOrder($order, isset($data['pf_payment_id']) ? (string) $data['pf_payment_id'] : null);
         }
 
-        if ($order->isPaid()) {
-            return true;
-        }
-
-        return $this->completeOrder($order, $data['pf_payment_id'] ?? null);
+        // A duplicate ITN for an already-paid order is still an accepted notification.
+        return $outcome === PayfastWebhookOutcome::Duplicate;
     }
 
     private function completeOrder(Order $order, ?string $pfPaymentId): bool

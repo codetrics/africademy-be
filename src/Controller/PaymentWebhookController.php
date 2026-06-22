@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Service\OrderService;
 use App\Service\PaymentMethodService;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,8 +24,16 @@ final class PaymentWebhookController extends AbstractController
         Request $request,
         PaymentMethodService $paymentMethodService,
         OrderService $orderService,
+        LoggerInterface $payfastLogger,
     ): Response {
         $data = $request->request->all();
+
+        $payfastLogger->info('PayFast ITN endpoint hit', [
+            'ip' => $request->getClientIp(),
+            'm_payment_id' => (string) ($data['m_payment_id'] ?? ''),
+            'payment_status' => (string) ($data['payment_status'] ?? ''),
+            'has_signature' => isset($data['signature']),
+        ]);
 
         // Tokenization (card setup) ITNs are routed to payment methods; everything else to orders.
         if (!$paymentMethodService->handleTokenizationItn($data)) {
