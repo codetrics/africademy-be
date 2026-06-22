@@ -22,11 +22,14 @@ class RefreshTokenService
      */
     public function revokeAllForUser(User $user): void
     {
-        $this->entityManager->createQuery(
-            'DELETE FROM ' . RefreshToken::class . ' refreshToken WHERE refreshToken.username = :username',
-        )
-            ->setParameter('username', $user->getUserIdentifier())
-            ->execute();
+        $refreshTokens = $this->entityManager->getRepository(RefreshToken::class)
+            ->findBy(['username' => $user->getUserIdentifier()]);
+
+        foreach ($refreshTokens as $refreshToken) {
+            $this->entityManager->remove($refreshToken);
+        }
+
+        $this->entityManager->flush();
     }
 
     /**
@@ -35,14 +38,18 @@ class RefreshTokenService
      */
     public function revokeForUser(User $user, string $refreshToken): bool
     {
-        $deleted = $this->entityManager->createQuery(
-            'DELETE FROM ' . RefreshToken::class . ' refreshToken'
-            . ' WHERE refreshToken.username = :username AND refreshToken.refreshToken = :token',
-        )
-            ->setParameter('username', $user->getUserIdentifier())
-            ->setParameter('token', $refreshToken)
-            ->execute();
+        $token = $this->entityManager->getRepository(RefreshToken::class)->findOneBy([
+            'username' => $user->getUserIdentifier(),
+            'refreshToken' => $refreshToken,
+        ]);
 
-        return $deleted > 0;
+        if (!$token instanceof RefreshToken) {
+            return false;
+        }
+
+        $this->entityManager->remove($token);
+        $this->entityManager->flush();
+
+        return true;
     }
 }
