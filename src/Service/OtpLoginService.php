@@ -12,8 +12,10 @@ use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailureException;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use App\Security\UserChecker;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Security\Core\Exception\AccountStatusException;
 
 /**
  * Drives the email-OTP second factor on login: minting/decoding the short-lived
@@ -35,6 +37,7 @@ class OtpLoginService
         private readonly RefreshTokenManagerInterface $refreshTokenManager,
         private readonly UserRepository $userRepository,
         private readonly VerificationService $verificationService,
+        private readonly UserChecker $userChecker,
         #[Autowire(param: 'gesdinet_jwt_refresh_token.ttl')]
         private readonly int $refreshTokenTtl,
     ) {
@@ -78,6 +81,14 @@ class OtpLoginService
             return null;
         }
 
+        // Re-enforce account status: the account may have been suspended/rejected
+        // in the few minutes since the pre-auth token (password step) was issued.
+        try {
+            $this->userChecker->checkPreAuth($user);
+        } catch (AccountStatusException) {
+            return null;
+        }
+
         if (!$this->verificationService->verifyLoginOtp($user, $code)) {
             return null;
         }
@@ -100,9 +111,36 @@ class OtpLoginService
             return false;
         }
 
+        try {
+            $this->userChecker->checkPreAuth($user);
+        } catch (AccountStatusException) {
+            return false;
+        }
+
         $this->verificationService->requestLoginOtp($user);
 
         return true;
+    }
+
+    /**
+     * Reads the email embedded in a pre-auth token without a DB lookup — used to
+     * scope the login-OTP rate limiters per email+IP. Null when the token is bad.
+     */
+    public function peekEmail(string $preAuthToken): ?string
+    {
+        if ($preAuthToken === '') {
+            return null;
+        }
+
+        try {
+            $payload = $this->jwtEncoder->decode($preAuthToken);
+        } catch (JWTDecodeFailureException) {
+            return null;
+        }
+
+        $email = $payload['otp_email'] ?? null;
+
+        return is_string($email) && $email !== '' ? $email : null;
     }
 
     public function isWithinTrustWindow(User $user): bool

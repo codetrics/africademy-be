@@ -11,6 +11,9 @@ use App\Enum\VerificationPurpose;
 use App\Repository\UserRepository;
 use App\Repository\VerificationCodeRepository;
 use DateTime;
+use Doctrine\DBAL\LockMode;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class VerificationService
@@ -25,6 +28,7 @@ class VerificationService
         private readonly NotificationService $notificationService,
         private readonly RefreshTokenService $refreshTokenService,
         private readonly WelcomeMailer $welcomeMailer,
+        private readonly EntityManagerInterface $entityManager,
     ) {
     }
 
@@ -172,30 +176,53 @@ class VerificationService
     {
         $verificationCode = $this->verificationCodeRepository->findLatestActive($user, $purpose);
 
-        if (is_null($verificationCode) || $verificationCode->isExpired()) {
+        if (is_null($verificationCode)) {
             return false;
         }
 
-        // Burn the code after too many wrong guesses so a short-lived 6-digit
-        // code cannot be brute-forced within its TTL.
-        if ($verificationCode->hasReachedMaxAttempts()) {
-            $verificationCode->setUsedAt(new DateTime());
-            $this->verificationCodeRepository->save($verificationCode, true);
+        // Lock the code row so concurrent verify attempts can't both pass the
+        // attempt/used checks — enforces the brute-force ceiling and single-use
+        // guarantee under concurrency.
+        $this->entityManager->beginTransaction();
+        try {
+            $verificationCode = $this->entityManager->find(VerificationCode::class, $verificationCode->getId(), LockMode::PESSIMISTIC_WRITE);
 
-            return false;
+            if (!$verificationCode instanceof VerificationCode
+                || $verificationCode->isExpired()
+                || !is_null($verificationCode->getUsedAt())
+            ) {
+                $this->entityManager->commit();
+
+                return false;
+            }
+
+            // Burn the code after too many wrong guesses so a short-lived 6-digit
+            // code cannot be brute-forced within its TTL.
+            if ($verificationCode->hasReachedMaxAttempts()) {
+                $verificationCode->setUsedAt(new DateTime());
+                $this->verificationCodeRepository->save($verificationCode);
+                $this->entityManager->flush();
+                $this->entityManager->commit();
+
+                return false;
+            }
+
+            $verificationCode->incrementAttempts();
+
+            $verified = password_verify($plainCode, $verificationCode->getCodeHash());
+            if ($verified) {
+                $verificationCode->setUsedAt(new DateTime());
+            }
+
+            $this->verificationCodeRepository->save($verificationCode);
+            $this->entityManager->flush();
+            $this->entityManager->commit();
+
+            return $verified;
+        } catch (Exception $exception) {
+            $this->entityManager->rollback();
+
+            throw $exception;
         }
-
-        $verificationCode->incrementAttempts();
-
-        if (!password_verify($plainCode, $verificationCode->getCodeHash())) {
-            $this->verificationCodeRepository->save($verificationCode, true);
-
-            return false;
-        }
-
-        $verificationCode->setUsedAt(new DateTime());
-        $this->verificationCodeRepository->save($verificationCode, true);
-
-        return true;
     }
 }

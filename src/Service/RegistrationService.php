@@ -27,12 +27,14 @@ class RegistrationService
      * in a single transaction. Students are active immediately; facilitators receive
      * ROLE_FACILITATOR straight away but stay pending until an admin approves them.
      *
-     * @throws Exception when the email address is already registered
+     * Returns null when the email is already registered — callers must respond
+     * identically to a successful registration so the endpoint does not leak which
+     * email addresses already have an account.
      */
-    public function register(User $user, string $plainPassword, AccountType $accountType): User
+    public function register(User $user, string $plainPassword, AccountType $accountType): ?User
     {
         if (!is_null($this->userRepository->findOneByEmail($user->getEmail()))) {
-            throw new Exception('This email address is already registered.');
+            return null;
         }
 
         if ($accountType === AccountType::Facilitator) {

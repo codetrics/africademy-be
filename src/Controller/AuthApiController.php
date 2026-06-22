@@ -107,7 +107,7 @@ final class AuthApiController extends AbstractController
         }
 
         try {
-            $registrationService->register($user, (string) $data['password'], $accountType);
+            $registeredUser = $registrationService->register($user, (string) $data['password'], $accountType);
         } catch (Exception $exception) {
             return new JsonExceptionResponse(
                 JsonExceptionResponse::ERROR_VALIDATION,
@@ -116,25 +116,27 @@ final class AuthApiController extends AbstractController
             );
         }
 
-        try {
-            $verificationService->requestEmailVerification($user);
-        } catch (Exception $exception) {
-            $logger->error(sprintf('Failed to send verification email for %s: %s', $user->getEmail(), $exception->getMessage()));
+        // register() returns null when the email already exists. Respond identically
+        // either way so the endpoint never reveals which emails are registered.
+        if ($registeredUser instanceof User) {
+            try {
+                $verificationService->requestEmailVerification($registeredUser);
+            } catch (Exception $exception) {
+                $logger->error(sprintf('Failed to send verification email for %s: %s', $registeredUser->getEmail(), $exception->getMessage()));
+            }
+
+            $userLogService->log(
+                UserLogType::REGISTER,
+                'User registered',
+                $registeredUser->getEmail(),
+                $request->headers->get('User-Agent'),
+                $request->getClientIp(),
+            );
         }
 
-        $userLogService->log(
-            UserLogType::REGISTER,
-            'User registered',
-            $user->getEmail(),
-            $request->headers->get('User-Agent'),
-            $request->getClientIp(),
-        );
-
-        $userJSON = $serializerService->serialize($user);
-
         $response = new JsonResponse();
-        $response->setData(['user' => json_decode($userJSON)]);
-        $response->setStatusCode(Response::HTTP_CREATED);
+        $response->setData(['message' => 'Registration received. If the email address is not already in use, a verification email has been sent — please check your inbox.']);
+        $response->setStatusCode(Response::HTTP_ACCEPTED);
 
         return $response;
     }
