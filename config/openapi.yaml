@@ -2656,6 +2656,90 @@ paths:
                                         type: array
                                         items: { $ref: '#/components/schemas/Course' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+    /admin/orders:
+        get:
+            tags: [Admin]
+            summary: List orders (admin, paginated)
+            description: All orders across users, newest first, with status counts. Filter by status, buyer email/name, type and created-at range.
+            parameters:
+                - { name: status, in: query, schema: { type: string, enum: [pending, paid, cancelled, refunded] } }
+                - { name: q, in: query, schema: { type: string }, description: Buyer email or name search }
+                - { name: type, in: query, schema: { type: string, enum: [course, bundle] } }
+                - { name: from, in: query, schema: { type: integer }, description: Created-at lower bound (Unix timestamp) }
+                - { name: to, in: query, schema: { type: integer }, description: Created-at upper bound (Unix timestamp) }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 20 } }
+            responses:
+                '200':
+                    description: Orders with status counts
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    orders:
+                                        type: array
+                                        items:
+                                            allOf:
+                                                - { $ref: '#/components/schemas/Order' }
+                                                - type: object
+                                                  properties:
+                                                      buyer: { $ref: '#/components/schemas/AdminOrderBuyer' }
+                                    counts:
+                                        type: object
+                                        properties:
+                                            pending: { type: integer }
+                                            paid: { type: integer }
+                                            cancelled: { type: integer }
+                                            refunded: { type: integer }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/orders/{id}:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Order ULID }
+        get:
+            tags: [Admin]
+            summary: Get an order (admin)
+            description: Full order detail including buyer, coupon code, PayFast payment id and any linked refund request.
+            responses:
+                '200':
+                    description: The order
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    order:
+                                        allOf:
+                                            - { $ref: '#/components/schemas/Order' }
+                                            - type: object
+                                              properties:
+                                                  buyer: { $ref: '#/components/schemas/AdminOrderBuyer' }
+                                                  pf_payment_id: { type: string, nullable: true }
+                                                  coupon: { type: string, nullable: true, description: Applied coupon code }
+                                                  refund_request: { allOf: [{ $ref: '#/components/schemas/RefundRequest' }], nullable: true }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+    /admin/orders/{id}/cancel:
+        parameters:
+            - { name: id, in: path, required: true, schema: { type: string }, description: Order ULID }
+        post:
+            tags: [Admin]
+            summary: Cancel a pending order (admin)
+            description: Marks an abandoned pending order as cancelled. Allowed only while the order is pending.
+            responses:
+                '200':
+                    description: The cancelled order
+                    content:
+                        application/json:
+                            schema: { type: object, properties: { order: { $ref: '#/components/schemas/Order' } } }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '409': { $ref: '#/components/responses/Conflict' }
     /admin/students:
         get:
             tags: [Admin]
@@ -3168,6 +3252,14 @@ components:
                 refunded_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
+        AdminOrderBuyer:
+            type: object
+            description: Slim buyer summary attached to admin order payloads.
+            properties:
+                id: { type: string, description: User ULID }
+                email: { type: string }
+                first_name: { type: string }
+                last_name: { type: string }
         RefundRequest:
             type: object
             properties:
