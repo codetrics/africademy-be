@@ -181,7 +181,7 @@ tags:
         Authors (or admins) edit/delete; all actions require a logged-in student.
     - name: Blog
       description: >
-        Marketing blog. Reads are public; authoring (create/update/publish/cover) requires ROLE_FACILITATOR
+        Marketing blog. Reads are public; authoring (create/update/publish/cover) requires ROLE_ADMIN
         and is owner/admin-gated. Blog category management is admin-only.
     - name: Newsletter
       description: >
@@ -2145,7 +2145,7 @@ paths:
         post:
             tags: [Blog]
             summary: Create a blog post (draft)
-            description: Requires ROLE_FACILITATOR. The post starts as a draft; read time is computed from the body.
+            description: Requires ROLE_ADMIN. The post starts as a draft; read time is computed from the body.
             requestBody:
                 required: true
                 content:

@@ -60,7 +60,7 @@ exception is a Swagger UI page that renders the OpenAPI spec.
 
 **Engagement & content**
 - Community hub — posts (tags, image), comments, likes, trending topics, with admin moderation (hide/unhide).
-- Blog with **public (unauthenticated) read access** and facilitator/admin authoring.
+- Blog with **public (unauthenticated) read access** and admin-only authoring.
 - Newsletter — public, rate-limited **double opt-in** (confirm-by-email) + token unsubscribe.
 
 **Admin & operations**
