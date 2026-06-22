@@ -35,7 +35,7 @@ final class AdminActivityApiController extends AbstractController
         $type = $request->query->getString('type');
         $search = $request->query->getString('q');
         $from = $this->parseDate($request->query->getString('from'));
-        $to = $this->parseDate($request->query->getString('to'));
+        $to = $this->parseDate($request->query->getString('to'), true);
 
         $pagination = $paginator->paginate(
             $adminDirectoryService->activityFeedQueryBuilder(
@@ -57,14 +57,20 @@ final class AdminActivityApiController extends AbstractController
         return $response;
     }
 
-    private function parseDate(string $value): ?DateTime
+    private function parseDate(string $value, bool $endOfDay = false): ?DateTime
     {
         if ($value === '') {
             return null;
         }
 
-        $date = DateTime::createFromFormat('Y-m-d', $value);
+        // The leading '!' resets the time to 00:00:00 (otherwise createFromFormat
+        // fills in the current time, silently excluding part of the day).
+        $date = DateTime::createFromFormat('!Y-m-d', $value);
 
-        return $date instanceof DateTime ? $date : null;
+        if (!$date instanceof DateTime) {
+            return null;
+        }
+
+        return $endOfDay ? $date->setTime(23, 59, 59) : $date;
     }
 }
