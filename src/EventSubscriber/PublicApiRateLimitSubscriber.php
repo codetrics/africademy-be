@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\EventSubscriber;
 
 use App\Exceptions\JsonExceptionResponse;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -24,6 +25,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 class PublicApiRateLimitSubscriber implements EventSubscriberInterface
 {
     public function __construct(
+        #[Target('public_api')]
         private readonly RateLimiterFactoryInterface $publicApiLimiter,
         private readonly TokenStorageInterface $tokenStorage,
     ) {

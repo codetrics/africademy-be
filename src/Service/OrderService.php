@@ -28,6 +28,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Exception;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Uid\Ulid;
 
 class OrderService
@@ -46,6 +47,7 @@ class OrderService
         private readonly UserLogService $userLogService,
         private readonly EntityManagerInterface $entityManager,
         private readonly PayfastWebhookRecorder $payfastWebhookRecorder,
+        #[Target('payfast')]
         private readonly LoggerInterface $payfastLogger,
     ) {
     }

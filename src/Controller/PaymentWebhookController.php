@@ -9,6 +9,7 @@ use App\Service\PaymentMethodService;
 use App\Service\PayFastService;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -26,6 +27,7 @@ final class PaymentWebhookController extends AbstractController
         PaymentMethodService $paymentMethodService,
         OrderService $orderService,
         PayFastService $payFastService,
+        #[Target('payfast')]
         LoggerInterface $payfastLogger,
     ): Response {
         $data = $request->request->all();
