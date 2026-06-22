@@ -40,15 +40,8 @@ final class PaymentWebhookController extends AbstractController
         ]);
 
         // Authenticity gate (defence-in-depth on top of the per-handler signature
-        // check): the request must come from a PayFast host AND PayFast must
-        // confirm the ITN via the server post-back. Always 200 so PayFast stops
-        // retrying a payload we will not process.
-        if (!$payFastService->isValidSourceIp($request->getClientIp())) {
-            $payfastLogger->warning('PayFast ITN rejected: source IP not allowlisted', ['ip' => $request->getClientIp()]);
-
-            return new Response('', Response::HTTP_OK);
-        }
-
+        // check): PayFast must confirm the ITN via the server post-back. Always
+        // 200 so PayFast stops retrying a payload we will not process.
         if (!$payFastService->serverValidateItn($data)) {
             $payfastLogger->warning('PayFast ITN rejected: server validation not VALID', [
                 'm_payment_id' => (string) ($data['m_payment_id'] ?? ''),

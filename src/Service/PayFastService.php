@@ -26,13 +26,6 @@ class PayFastService
     private const string SANDBOX_VALIDATE_URL = 'https://sandbox.payfast.co.za/eng/query/validate';
     private const string LIVE_VALIDATE_URL = 'https://www.payfast.co.za/eng/query/validate';
 
-    /** PayFast ITN source hosts — resolved to IPs for the inbound allowlist. */
-    private const array ITN_SOURCE_HOSTS = [
-        'www.payfast.co.za',
-        'w1w.payfast.co.za',
-        'w2w.payfast.co.za',
-        'sandbox.payfast.co.za',
-    ];
     private const string API_BASE_URL = 'https://api.payfast.co.za';
     private const string API_VERSION = 'v1';
     private const int ITEM_NAME_MAX_LENGTH = 100;
@@ -141,32 +134,6 @@ class PayFastService
         unset($data['signature']);
 
         return hash_equals($this->generateSignature($data), $signature);
-    }
-
-    /**
-     * Confirms the request originates from a PayFast ITN host. Defence-in-depth
-     * on top of the signature so a forged payload from an arbitrary source is
-     * rejected even if the passphrase were ever misconfigured. Skipped in tests.
-     */
-    public function isValidSourceIp(?string $ip): bool
-    {
-        if ($this->environment === 'test') {
-            return true;
-        }
-
-        if (is_null($ip) || $ip === '') {
-            return false;
-        }
-
-        $allowed = [];
-        foreach (self::ITN_SOURCE_HOSTS as $host) {
-            $resolved = gethostbynamel($host);
-            if ($resolved !== false) {
-                $allowed = array_merge($allowed, $resolved);
-            }
-        }
-
-        return in_array($ip, array_unique($allowed), true);
     }
 
     /**
