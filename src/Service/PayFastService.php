@@ -133,7 +133,22 @@ class PayFastService
 
         unset($data['signature']);
 
-        return hash_equals($this->generateSignature($data), $signature);
+        $computed = $this->generateItnSignature($data);
+
+        if (!hash_equals($computed, $signature)) {
+            // Temporary diagnostic — remove once ITN validation is confirmed in
+            // production. Passphrase is never logged (length only).
+            $this->logger->debug('PayFast ITN signature mismatch', [
+                'param_string' => $this->buildItnParamString($data),
+                'passphrase_length' => strlen($this->passphrase),
+                'computed' => $computed,
+                'received' => $signature,
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -208,6 +223,42 @@ class PayFastService
         }
 
         return md5($payload);
+    }
+
+    /**
+     * ITN signature reconstruction. Unlike the outgoing checkout signature
+     * (generateSignature), PayFast signs the ITN over EVERY posted field in the
+     * received order — blanks included, values untrimmed — so we must not skip
+     * empty values or trim here, otherwise the md5 will not match.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function generateItnSignature(array $data): string
+    {
+        $payload = $this->buildItnParamString($data);
+
+        if ($this->passphrase !== '') {
+            $payload .= '&passphrase=' . urlencode(trim($this->passphrase));
+        }
+
+        return md5($payload);
+    }
+
+    /**
+     * Builds the "key=value" param string from the posted ITN fields in received
+     * order (the signature field already removed). The passphrase is appended
+     * separately by generateItnSignature so this string can be logged safely.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function buildItnParamString(array $data): string
+    {
+        $pairs = [];
+        foreach ($data as $key => $value) {
+            $pairs[] = $key . '=' . urlencode((string) $value);
+        }
+
+        return implode('&', $pairs);
     }
 
     public function formatAmount(int $amountCents): string
