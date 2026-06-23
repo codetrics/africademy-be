@@ -47,7 +47,7 @@ final class SeedAppDataCommand extends AbstractCommand
     private const string PLAN_NAME = 'Premium';
     private const int PLAN_PRICE_CENTS = 15000;
 
-    private const string FACILITATOR_EMAIL = 'calvin.facilitator@codestudio.co.za';
+    private const string FACILITATOR_EMAIL = 'calvin+facilitator@codestudio.co.za';
     private const string FACILITATOR_FIRST_NAME = 'Dr. Nontokozo';
     private const string FACILITATOR_LAST_NAME = 'Mangquku';
 
