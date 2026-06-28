@@ -29,13 +29,14 @@ class RefundService
         private readonly AccessService $accessService,
         private readonly PayFastService $payFastService,
         private readonly UserLogService $userLogService,
+        private readonly RefundMailer $refundMailer,
         private readonly EntityManagerInterface $entityManager,
     ) {
     }
 
-    public function createPendingQueryBuilder(): QueryBuilder
+    public function refundRequestsQueryBuilder(?RefundStatus $status, ?DateTime $from, ?DateTime $to): QueryBuilder
     {
-        return $this->refundRequestRepository->createPendingQueryBuilder();
+        return $this->refundRequestRepository->createAdminQueryBuilder($status, $from, $to);
     }
 
     /**
@@ -122,6 +123,8 @@ class RefundService
             context: ['order' => (string) $order->getPublicId()],
         );
 
+        $this->refundMailer->sendApproved($refundRequest);
+
         return $refundRequest;
     }
 
@@ -142,6 +145,8 @@ class RefundService
             $refundRequest->getOrder()->getUser()->getEmail(),
             context: ['order' => (string) $refundRequest->getOrder()->getPublicId()],
         );
+
+        $this->refundMailer->sendRejected($refundRequest);
 
         return $refundRequest;
     }

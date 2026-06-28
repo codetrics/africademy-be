@@ -319,7 +319,9 @@ paths:
             summary: Register a new user
             description: >
                 Creates a user and its profile, then queues a welcome email followed by the
-                verification (OTP) email. Returns no token — log in afterwards. Public endpoint.
+                verification (OTP) email — the verification code is sent automatically, so there is
+                no need to call `verify-email/request` straight after registering.
+                Returns no token — log in afterwards. Public endpoint.
                 `account_type` selects the kind of account: `student` accounts get `ROLE_STUDENT` and
                 are active immediately; `facilitator` accounts get `ROLE_FACILITATOR` straight away but stay
                 pending admin approval and cannot log in until approved.
@@ -484,7 +486,11 @@ paths:
         post:
             tags: [Auth]
             summary: Request an email-verification code
-            description: Always returns 200 (does not reveal whether the email exists).
+            description: >
+                Always returns 200 (does not reveal whether the email exists). Registration already
+                sends a verification code automatically; this endpoint is for resending it. No new
+                code is issued if one was sent within the last 15 minutes (the code's lifetime), so
+                wait for that window to elapse before requesting another.
             security: []
             requestBody:
                 required: true
@@ -1466,7 +1472,24 @@ paths:
         post:
             tags: [Orders]
             summary: Request a refund for a paid order (within 30 days)
-            description: Creates a pending refund request. Admin approval and the actual PayFast refund happen later.
+            description: >
+                Creates a pending refund request. Admin approval and the actual PayFast refund happen later.
+
+
+                **Refund rules (use these to drive what the UI shows):**
+
+                - **Eligibility window** — an order is refundable only within **30 days of payment** (measured from when it was paid),
+                  and only if it is actually paid. Outside the window or for an unpaid order the request is rejected with `422`.
+
+                - **One request per order** — each order can have a single refund request. If one is already `pending` or `approved`,
+                  a new request is rejected with `409`. A previously `rejected` request can be submitted again (it is reopened) as long
+                  as the order is still within the 30-day window.
+
+                - **On approval** — the payment is refunded via the gateway, then access to every course on the order
+                  (including all courses in a bundle) is revoked and the order is marked `refunded`. Rejection leaves access untouched.
+
+                Frontends should only surface the "Request a refund" action while the order is paid and within the window, and should
+                hide/disable it once a non-rejected refund request exists.
             parameters:
                 - { name: id, in: path, required: true, schema: { type: string }, description: Order ULID }
             requestBody:
@@ -1485,9 +1508,15 @@ paths:
                                 type: object
                                 properties:
                                     refund_request: { $ref: '#/components/schemas/RefundRequest' }
-                '404': { $ref: '#/components/responses/NotFound' }
-                '409': { $ref: '#/components/responses/Conflict' }
-                '422': { $ref: '#/components/responses/ValidationError' }
+                '404':
+                    description: Order not found, or it does not belong to the authenticated user.
+                    content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+                '409':
+                    description: A refund has already been requested for this order (an existing request is pending or approved).
+                    content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+                '422':
+                    description: The order is not eligible for a refund — it is unpaid or the 30-day window has elapsed.
+                    content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
     /bundles:
         get:
             tags: [Bundles]
@@ -1654,13 +1683,17 @@ paths:
     /admin/refund-requests:
         get:
             tags: [Admin]
-            summary: List pending refund requests (ROLE_ADMIN)
+            summary: List refund requests (ROLE_ADMIN)
+            description: Returns refund requests of all statuses (newest first) by default. Optionally filter by status and by request date range.
             parameters:
+                - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected] }, description: Filter by refund status }
+                - { name: from, in: query, schema: { type: integer }, description: Only requests created at/after this Unix timestamp }
+                - { name: to, in: query, schema: { type: integer }, description: Only requests created at/before this Unix timestamp }
                 - { name: page, in: query, schema: { type: integer, default: 1 } }
                 - { name: limit, in: query, schema: { type: integer, default: 10 } }
             responses:
                 '200':
-                    description: Pending refund requests
+                    description: Refund requests
                     content:
                         application/json:
                             schema:
@@ -1669,10 +1702,15 @@ paths:
                                     refund_requests: { type: array, items: { $ref: '#/components/schemas/RefundRequest' } }
                                     pagination: { $ref: '#/components/schemas/Pagination' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /admin/refund-requests/{id}/approve:
         post:
             tags: [Admin]
             summary: Approve a refund — revokes access, refunds the order (ROLE_ADMIN)
+            description: >
+                Issues the gateway refund first; only once the money is returned does it revoke the buyer's access to every
+                course on the order (including all courses in a bundle), mark the order `refunded`, and email the customer.
+                Only a `pending` request can be approved. A gateway failure leaves everything unchanged and is retriable (`502`).
             parameters:
                 - { name: id, in: path, required: true, schema: { type: string }, description: Refund request ULID }
             responses:
@@ -1689,6 +1727,9 @@ paths:
         post:
             tags: [Admin]
             summary: Reject a refund request (ROLE_ADMIN)
+            description: >
+                Marks a `pending` request `rejected` and emails the customer. Access and the order are left untouched.
+                Only a `pending` request can be rejected (`422` otherwise).
             parameters:
                 - { name: id, in: path, required: true, schema: { type: string }, description: Refund request ULID }
             responses:

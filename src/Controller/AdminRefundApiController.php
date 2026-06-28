@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Enum\RefundStatus;
 use App\Exceptions\JsonExceptionResponse;
 use App\Service\Helper\Tools;
 use App\Exceptions\OrderException;
 use App\Service\RefundService;
 use App\Service\ReturnType\PaginationReturnType;
 use App\Service\SerializerService;
+use DateTime;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -35,8 +38,19 @@ final class AdminRefundApiController extends AbstractController
         PaginatorInterface $paginator,
         SerializerService $serializerService,
     ): JsonResponse {
+        $statusValue = $request->query->getString('status');
+        $status = $statusValue === '' ? null : RefundStatus::tryFrom($statusValue);
+        if ($statusValue !== '' && is_null($status)) {
+            return new JsonExceptionResponse(JsonExceptionResponse::ERROR_VALIDATION, 'Invalid status filter.', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $fromTimestamp = $request->query->getInt('from');
+        $from = $fromTimestamp > 0 ? new DateTime()->setTimestamp($fromTimestamp) : null;
+        $toTimestamp = $request->query->getInt('to');
+        $to = $toTimestamp > 0 ? new DateTime()->setTimestamp($toTimestamp) : null;
+
         $pagination = $paginator->paginate(
-            $refundService->createPendingQueryBuilder(),
+            $refundService->refundRequestsQueryBuilder($status, $from, $to),
             $request->query->getInt('page', 1),
             Tools::clampLimit($request->query->getInt('limit', 10)),
         );

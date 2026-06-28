@@ -1,0 +1,10 @@
+{% extends 'email/base.html.twig' %}
+
+{% block title %}Your refund has been approved{% endblock %}
+
+{% block content %}
+    <h1 style="margin:0 0 16px; font-size:20px;">Your refund has been approved</h1>
+    <p style="margin:0 0 16px;">Hi {{ first_name }},</p>
+    <p style="margin:0 0 16px; line-height:1.5;">Your refund of {{ currency }} {{ amount }} has been approved and processed. The amount has been returned to your original payment method and may take a few business days to reflect.</p>
+    <p style="margin:0 0 16px; line-height:1.5;">Access to the refunded course(s) has been removed from your account.</p>
+{% endblock %}

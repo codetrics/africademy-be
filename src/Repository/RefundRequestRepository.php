@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Entity\Order;
 use App\Entity\RefundRequest;
 use App\Enum\RefundStatus;
+use DateTime;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -55,14 +56,29 @@ class RefundRequestRepository extends ServiceEntityRepository
         return $this->findOneBy(['publicId' => $publicId]);
     }
 
-    public function createPendingQueryBuilder(): QueryBuilder
+    public function createAdminQueryBuilder(?RefundStatus $status, ?DateTime $from, ?DateTime $to): QueryBuilder
     {
-        return $this->createQueryBuilder('refund')
+        $queryBuilder = $this->createQueryBuilder('refund')
             ->leftJoin('refund.order', 'o')
             ->addSelect('o')
-            ->where('refund.status = :pending')
-            ->setParameter('pending', RefundStatus::Pending)
-            ->orderBy('refund.createdAt', 'ASC');
+            ->orderBy('refund.createdAt', 'DESC');
+
+        if (!is_null($status)) {
+            $queryBuilder->andWhere('refund.status = :status')
+                ->setParameter('status', $status);
+        }
+
+        if (!is_null($from)) {
+            $queryBuilder->andWhere('refund.createdAt >= :from')
+                ->setParameter('from', $from);
+        }
+
+        if (!is_null($to)) {
+            $queryBuilder->andWhere('refund.createdAt <= :to')
+                ->setParameter('to', $to);
+        }
+
+        return $queryBuilder;
     }
 }
 

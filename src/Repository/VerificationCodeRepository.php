@@ -44,6 +44,21 @@ class VerificationCodeRepository extends ServiceEntityRepository
         }
     }
 
+    public function hasActiveCodeIssuedSince(User $user, VerificationPurpose $purpose, DateTime $since): bool
+    {
+        return (int) $this->createQueryBuilder('code')
+            ->select('COUNT(code.id)')
+            ->where('code.user = :user')
+            ->andWhere('code.purpose = :purpose')
+            ->andWhere('code.usedAt IS NULL')
+            ->andWhere('code.createdAt >= :since')
+            ->setParameter('user', $user)
+            ->setParameter('purpose', $purpose)
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult() > 0;
+    }
+
     public function findLatestActive(User $user, VerificationPurpose $purpose): ?VerificationCode
     {
         return $this->createQueryBuilder('code')
