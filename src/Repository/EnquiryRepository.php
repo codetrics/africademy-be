@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Entity\Enquiry;
+use DateTime;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -39,5 +41,23 @@ class EnquiryRepository extends ServiceEntityRepository
         if ($flush) {
             $this->getEntityManager()->flush();
         }
+    }
+
+    public function createAdminQueryBuilder(?DateTime $from, ?DateTime $to): QueryBuilder
+    {
+        $queryBuilder = $this->createQueryBuilder('enquiry')
+            ->orderBy('enquiry.createdAt', 'DESC');
+
+        if (!is_null($from)) {
+            $queryBuilder->andWhere('enquiry.createdAt >= :from')
+                ->setParameter('from', $from);
+        }
+
+        if (!is_null($to)) {
+            $queryBuilder->andWhere('enquiry.createdAt <= :to')
+                ->setParameter('to', $to);
+        }
+
+        return $queryBuilder;
     }
 }

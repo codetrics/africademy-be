@@ -196,6 +196,10 @@ tags:
       description: >
         Public, rate-limited newsletter signup with double opt-in (confirm by email) and a one-click
         token unsubscribe.
+    - name: Enquiries
+      description: >
+        Public, rate-limited website contact form. A submission is stored and a notification email is
+        queued to the support inbox. No token required.
     - name: Analytics
       description: >
         Admin dashboard metrics — overview KPIs (users, revenue, MRR, subscriptions, enrollments,
@@ -1741,6 +1745,27 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
+    /admin/enquiries:
+        get:
+            tags: [Admin]
+            summary: List website enquiries (ROLE_ADMIN)
+            description: Returns submitted contact-form enquiries, newest first. Optionally filter by submission date range.
+            parameters:
+                - { name: from, in: query, schema: { type: integer }, description: Only enquiries created at/after this Unix timestamp }
+                - { name: to, in: query, schema: { type: integer }, description: Only enquiries created at/before this Unix timestamp }
+                - { name: page, in: query, schema: { type: integer, default: 1 } }
+                - { name: limit, in: query, schema: { type: integer, default: 10 } }
+            responses:
+                '200':
+                    description: Enquiries
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    enquiries: { type: array, items: { $ref: '#/components/schemas/Enquiry' } }
+                                    pagination: { $ref: '#/components/schemas/Pagination' }
+                '403': { $ref: '#/components/responses/Forbidden' }
     /admin/coupons:
         get:
             tags: [Admin]
@@ -2540,6 +2565,39 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '409': { $ref: '#/components/responses/Conflict' }
+    /public/enquiries:
+        post:
+            tags: [Enquiries]
+            summary: Submit a website enquiry
+            description: >-
+                Public, rate-limited contact form (5 requests / 15 minutes per IP). The submission is
+                persisted and a notification email is queued to the support inbox. Returns a generic
+                acknowledgement.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [full_name, email, subject, message]
+                            properties:
+                                full_name: { type: string, minLength: 2, maxLength: 150, example: Jane Doe }
+                                email: { type: string, format: email, maxLength: 255, example: jane@example.com }
+                                subject: { type: string, minLength: 2, maxLength: 150, example: Course availability }
+                                message: { type: string, minLength: 2, maxLength: 5000, example: 'Hi, I would like to know more about your courses.' }
+            responses:
+                '201':
+                    description: Enquiry received
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    message: { type: string, example: 'Thanks for getting in touch — we will be in contact soon.' }
+                '400': { $ref: '#/components/responses/BadRequest' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '429': { $ref: '#/components/responses/RateLimited' }
     /public/newsletter/subscribe:
         post:
             tags: [Newsletter]
@@ -3330,6 +3388,16 @@ components:
                 reason: { type: string, nullable: true }
                 status: { type: string, enum: [pending, approved, rejected] }
                 resolved_at: { type: integer, nullable: true, description: 'Unix timestamp, or null' }
+                created_at: { type: integer, description: Unix timestamp }
+                updated_at: { type: integer, description: Unix timestamp }
+        Enquiry:
+            type: object
+            properties:
+                id: { type: string, description: ULID public identifier }
+                full_name: { type: string }
+                email: { type: string, format: email }
+                subject: { type: string }
+                message: { type: string }
                 created_at: { type: integer, description: Unix timestamp }
                 updated_at: { type: integer, description: Unix timestamp }
         Coupon:

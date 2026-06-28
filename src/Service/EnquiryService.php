@@ -6,7 +6,9 @@ namespace App\Service;
 
 use App\Entity\Enquiry;
 use App\Repository\EnquiryRepository;
+use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\QueryBuilder;
 use Exception;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -27,6 +29,11 @@ class EnquiryService
      * recipient. Persisting and queuing share a transaction so an enquiry is
      * never recorded without its notification (or vice versa).
      */
+    public function enquiriesQueryBuilder(?DateTime $from, ?DateTime $to): QueryBuilder
+    {
+        return $this->enquiryRepository->createAdminQueryBuilder($from, $to);
+    }
+
     public function submit(Enquiry $enquiry): Enquiry
     {
         $this->entityManager->beginTransaction();
