@@ -1,0 +1,10 @@
+{% extends 'email/base.html.twig' %}
+
+{% block title %}Your refund request was declined{% endblock %}
+
+{% block content %}
+    <h1 style="margin:0 0 16px; font-size:20px;">Your refund request was declined</h1>
+    <p style="margin:0 0 16px;">Hi {{ first_name }},</p>
+    <p style="margin:0 0 16px; line-height:1.5;">After review, your refund request for {{ currency }} {{ amount }} could not be approved. Your access to the course(s) remains active.</p>
+    <p style="margin:0 0 16px; line-height:1.5;">If you believe this was a mistake, please reply to this email and our team will be happy to help.</p>
+{% endblock %}

@@ -1660,13 +1660,17 @@ paths:
     /admin/refund-requests:
         get:
             tags: [Admin]
-            summary: List pending refund requests (ROLE_ADMIN)
+            summary: List refund requests (ROLE_ADMIN)
+            description: Returns refund requests of all statuses (newest first) by default. Optionally filter by status and by request date range.
             parameters:
+                - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected] }, description: Filter by refund status }
+                - { name: from, in: query, schema: { type: integer }, description: Only requests created at/after this Unix timestamp }
+                - { name: to, in: query, schema: { type: integer }, description: Only requests created at/before this Unix timestamp }
                 - { name: page, in: query, schema: { type: integer, default: 1 } }
                 - { name: limit, in: query, schema: { type: integer, default: 10 } }
             responses:
                 '200':
-                    description: Pending refund requests
+                    description: Refund requests
                     content:
                         application/json:
                             schema:
@@ -1675,6 +1679,7 @@ paths:
                                     refund_requests: { type: array, items: { $ref: '#/components/schemas/RefundRequest' } }
                                     pagination: { $ref: '#/components/schemas/Pagination' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
     /admin/refund-requests/{id}/approve:
         post:
             tags: [Admin]
