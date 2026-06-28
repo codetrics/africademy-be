@@ -41,6 +41,13 @@ class VerificationService
             return;
         }
 
+        // Debounce duplicate sends: a code issued within the TTL window is still
+        // valid, so don't queue another email.
+        $issuedSince = new DateTime(sprintf('-%d minutes', self::CODE_TTL_MINUTES));
+        if ($this->verificationCodeRepository->hasActiveCodeIssuedSince($user, VerificationPurpose::EmailVerification, $issuedSince)) {
+            return;
+        }
+
         $code = $this->issueCode($user, VerificationPurpose::EmailVerification);
 
         $this->notificationService->createEmailNotification(

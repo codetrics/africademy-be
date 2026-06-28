@@ -319,7 +319,9 @@ paths:
             summary: Register a new user
             description: >
                 Creates a user and its profile, then queues a welcome email followed by the
-                verification (OTP) email. Returns no token — log in afterwards. Public endpoint.
+                verification (OTP) email — the verification code is sent automatically, so there is
+                no need to call `verify-email/request` straight after registering.
+                Returns no token — log in afterwards. Public endpoint.
                 `account_type` selects the kind of account: `student` accounts get `ROLE_STUDENT` and
                 are active immediately; `facilitator` accounts get `ROLE_FACILITATOR` straight away but stay
                 pending admin approval and cannot log in until approved.
@@ -484,7 +486,11 @@ paths:
         post:
             tags: [Auth]
             summary: Request an email-verification code
-            description: Always returns 200 (does not reveal whether the email exists).
+            description: >
+                Always returns 200 (does not reveal whether the email exists). Registration already
+                sends a verification code automatically; this endpoint is for resending it. No new
+                code is issued if one was sent within the last 15 minutes (the code's lifetime), so
+                wait for that window to elapse before requesting another.
             security: []
             requestBody:
                 required: true
