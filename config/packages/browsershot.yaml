@@ -1,15 +1,11 @@
 parameters:
     # Paths to the Node/NPM binaries Browsershot shells out to when rendering
-    # PDFs. Default to the binaries on PATH; deployments that install Node via
-    # nvm (see Dockerfile) override these with the absolute paths via env vars.
-    app.browsershot.node_binary: '%env(default:browsershot_node_binary_default:BROWSER_SHOT_NODE_BINARY)%'
-    app.browsershot.npm_binary: '%env(default:browsershot_npm_binary_default:BROWSER_SHOT_NPM_BINARY)%'
+    # PDFs, supplied via env vars. Deployments that install Node via nvm (see
+    # Dockerfile) set the absolute paths through BROWSER_SHOT_NODE_BINARY /
+    # BROWSER_SHOT_NPM_BINARY (docker-deploy.yml); local dev sets them in .env.
+    app.browsershot.node_binary: '%env(BROWSER_SHOT_NODE_BINARY)%'
+    app.browsershot.npm_binary: '%env(BROWSER_SHOT_NPM_BINARY)%'
     # Absolute path to the Chrome/Chromium binary. Passed explicitly to Browsershot
     # so rendering never depends on puppeteer's bundled-version cache lookup. The
-    # Dockerfile sets PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium; empty falls back
-    # to puppeteer's own resolution.
-    app.browsershot.chrome_path: '%env(default:browsershot_chrome_path_default:PUPPETEER_EXECUTABLE_PATH)%'
-
-    browsershot_node_binary_default: 'node'
-    browsershot_npm_binary_default: 'npm'
-    browsershot_chrome_path_default: ''
+    # Dockerfile sets PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium.
+    app.browsershot.chrome_path: '%env(PUPPETEER_EXECUTABLE_PATH)%'
