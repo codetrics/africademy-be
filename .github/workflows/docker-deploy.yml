@@ -83,6 +83,8 @@ jobs:
           PAYFAST_RETURN_URL=${{ vars.PAYFAST_RETURN_URL }}
           PAYFAST_CANCEL_URL=${{ vars.PAYFAST_CANCEL_URL }}
           PAYFAST_NOTIFY_URL=${{ vars.PAYFAST_NOTIFY_URL }}
+          BROWSER_SHOT_NODE_BINARY=${{ vars.BROWSER_SHOT_NODE_BINARY }}
+          BROWSER_SHOT_NPM_BINARY=${{ vars.BROWSER_SHOT_NPM_BINARY }}
           EOF
 
       - name: Write JWT Private Key on Server
