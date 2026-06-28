@@ -74,6 +74,7 @@ security:
         - { path: ^/api/v1/public/categories, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/blog, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/newsletter, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/enquiries, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/certificates/verify, roles: PUBLIC_ACCESS }
         # Auth that needs no token at all:
         - { path: ^/api/v1/public/auth/register, roles: PUBLIC_ACCESS }

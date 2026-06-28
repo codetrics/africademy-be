@@ -1,0 +1,5 @@
+parameters:
+    # Address that receives website enquiry notifications; production overrides via env var.
+    app.enquiry.recipient: '%env(default:enquiry_recipient_default:ENQUIRY_RECIPIENT)%'
+
+    enquiry_recipient_default: 'dev@codestudio.co.za'
